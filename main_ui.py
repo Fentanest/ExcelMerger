@@ -16,11 +16,11 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QGroupBox,
-    QLabel, QLineEdit, QListView, QMainWindow,
-    QMenu, QMenuBar, QProgressBar, QPushButton,
-    QRadioButton, QSizePolicy, QSpinBox, QStatusBar,
-    QTextBrowser, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QGridLayout,
+    QGroupBox, QLabel, QLineEdit, QListView,
+    QMainWindow, QMenu, QMenuBar, QProgressBar,
+    QPushButton, QRadioButton, QSizePolicy, QSpinBox,
+    QStatusBar, QTextBrowser, QVBoxLayout, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -69,18 +69,29 @@ class Ui_MainWindow(object):
         self.listFileAdded = QListView(self.grpFile)
         self.listFileAdded.setObjectName(u"listFileAdded")
         self.listFileAdded.setGeometry(QRect(10, 30, 190, 340))
+        self.listFileAdded.setAcceptDrops(True)
+        self.listFileAdded.setDragEnabled(True)
+        self.listFileAdded.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.listFileAdded.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.grpSheet = QGroupBox(self.centralwidget)
         self.grpSheet.setObjectName(u"grpSheet")
         self.grpSheet.setGeometry(QRect(230, 10, 210, 380))
         self.listSheetInFile = QListView(self.grpSheet)
         self.listSheetInFile.setObjectName(u"listSheetInFile")
         self.listSheetInFile.setGeometry(QRect(10, 30, 190, 340))
+        self.listSheetInFile.setDragEnabled(True)
+        self.listSheetInFile.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
+        self.listSheetInFile.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.grpSheetToMerge = QGroupBox(self.centralwidget)
         self.grpSheetToMerge.setObjectName(u"grpSheetToMerge")
         self.grpSheetToMerge.setGeometry(QRect(475, 10, 210, 380))
         self.listSheetToMerge = QListView(self.grpSheetToMerge)
         self.listSheetToMerge.setObjectName(u"listSheetToMerge")
         self.listSheetToMerge.setGeometry(QRect(10, 30, 190, 340))
+        self.listSheetToMerge.setAcceptDrops(True)
+        self.listSheetToMerge.setDragEnabled(True)
+        self.listSheetToMerge.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+        self.listSheetToMerge.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.btnSheetToMergeAdd = QPushButton(self.centralwidget)
         self.btnSheetToMergeAdd.setObjectName(u"btnSheetToMergeAdd")
         self.btnSheetToMergeAdd.setGeometry(QRect(440, 150, 35, 35))
@@ -105,28 +116,28 @@ class Ui_MainWindow(object):
         self.groupBox_2 = QGroupBox(self.centralwidget)
         self.groupBox_2.setObjectName(u"groupBox_2")
         self.groupBox_2.setGeometry(QRect(230, 390, 210, 90))
-        self.widget = QWidget(self.groupBox_2)
-        self.widget.setObjectName(u"widget")
-        self.widget.setGeometry(QRect(15, 26, 188, 56))
-        self.gridLayout = QGridLayout(self.widget)
+        self.layoutWidget = QWidget(self.groupBox_2)
+        self.layoutWidget.setObjectName(u"layoutWidget")
+        self.layoutWidget.setGeometry(QRect(15, 26, 188, 56))
+        self.gridLayout = QGridLayout(self.layoutWidget)
         self.gridLayout.setObjectName(u"gridLayout")
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
-        self.radioButtonAll = QRadioButton(self.widget)
+        self.radioButtonAll = QRadioButton(self.layoutWidget)
         self.radioButtonAll.setObjectName(u"radioButtonAll")
 
         self.gridLayout.addWidget(self.radioButtonAll, 0, 0, 1, 1)
 
-        self.radioButtonChoice = QRadioButton(self.widget)
+        self.radioButtonChoice = QRadioButton(self.layoutWidget)
         self.radioButtonChoice.setObjectName(u"radioButtonChoice")
 
         self.gridLayout.addWidget(self.radioButtonChoice, 0, 1, 1, 1)
 
-        self.radioButtonSpecific = QRadioButton(self.widget)
+        self.radioButtonSpecific = QRadioButton(self.layoutWidget)
         self.radioButtonSpecific.setObjectName(u"radioButtonSpecific")
 
         self.gridLayout.addWidget(self.radioButtonSpecific, 1, 0, 1, 1)
 
-        self.lineEditSheetSpecific = QLineEdit(self.widget)
+        self.lineEditSheetSpecific = QLineEdit(self.layoutWidget)
         self.lineEditSheetSpecific.setObjectName(u"lineEditSheetSpecific")
 
         self.gridLayout.addWidget(self.lineEditSheetSpecific, 1, 1, 1, 1)
@@ -134,23 +145,23 @@ class Ui_MainWindow(object):
         self.groupBox = QGroupBox(self.centralwidget)
         self.groupBox.setObjectName(u"groupBox")
         self.groupBox.setGeometry(QRect(695, 10, 90, 131))
-        self.widget1 = QWidget(self.groupBox)
-        self.widget1.setObjectName(u"widget1")
-        self.widget1.setGeometry(QRect(18, 30, 54, 90))
-        self.verticalLayout_2 = QVBoxLayout(self.widget1)
+        self.layoutWidget1 = QWidget(self.groupBox)
+        self.layoutWidget1.setObjectName(u"layoutWidget1")
+        self.layoutWidget1.setGeometry(QRect(18, 30, 54, 90))
+        self.verticalLayout_2 = QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.radioButtonSheet = QRadioButton(self.widget1)
+        self.radioButtonSheet = QRadioButton(self.layoutWidget1)
         self.radioButtonSheet.setObjectName(u"radioButtonSheet")
 
         self.verticalLayout_2.addWidget(self.radioButtonSheet)
 
-        self.radioButtonHorizontal = QRadioButton(self.widget1)
+        self.radioButtonHorizontal = QRadioButton(self.layoutWidget1)
         self.radioButtonHorizontal.setObjectName(u"radioButtonHorizontal")
 
         self.verticalLayout_2.addWidget(self.radioButtonHorizontal)
 
-        self.radioButtonVertical = QRadioButton(self.widget1)
+        self.radioButtonVertical = QRadioButton(self.layoutWidget1)
         self.radioButtonVertical.setObjectName(u"radioButtonVertical")
 
         self.verticalLayout_2.addWidget(self.radioButtonVertical)
@@ -167,18 +178,18 @@ class Ui_MainWindow(object):
         self.label.setFont(font)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.setWordWrap(False)
-        self.widget2 = QWidget(self.groupBox_3)
-        self.widget2.setObjectName(u"widget2")
-        self.widget2.setGeometry(QRect(20, 40, 50, 62))
-        self.verticalLayout_3 = QVBoxLayout(self.widget2)
+        self.layoutWidget2 = QWidget(self.groupBox_3)
+        self.layoutWidget2.setObjectName(u"layoutWidget2")
+        self.layoutWidget2.setGeometry(QRect(20, 40, 50, 62))
+        self.verticalLayout_3 = QVBoxLayout(self.layoutWidget2)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
-        self.checkBoxEmptyrow = QCheckBox(self.widget2)
+        self.checkBoxEmptyrow = QCheckBox(self.layoutWidget2)
         self.checkBoxEmptyrow.setObjectName(u"checkBoxEmptyrow")
 
         self.verticalLayout_3.addWidget(self.checkBoxEmptyrow)
 
-        self.checkBoxEmptyColumn = QCheckBox(self.widget2)
+        self.checkBoxEmptyColumn = QCheckBox(self.layoutWidget2)
         self.checkBoxEmptyColumn.setObjectName(u"checkBoxEmptyColumn")
 
         self.verticalLayout_3.addWidget(self.checkBoxEmptyColumn)
@@ -191,6 +202,25 @@ class Ui_MainWindow(object):
         font1.setPointSize(11)
         font1.setBold(False)
         self.btnStart.setFont(font1)
+        self.groupBox_4 = QGroupBox(self.centralwidget)
+        self.groupBox_4.setObjectName(u"groupBox_4")
+        self.groupBox_4.setGeometry(QRect(480, 390, 160, 90))
+        self.widget = QWidget(self.groupBox_4)
+        self.widget.setObjectName(u"widget")
+        self.widget.setGeometry(QRect(10, 29, 142, 50))
+        self.verticalLayout = QVBoxLayout(self.widget)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.radioButtonOriginalBoth = QRadioButton(self.widget)
+        self.radioButtonOriginalBoth.setObjectName(u"radioButtonOriginalBoth")
+
+        self.verticalLayout.addWidget(self.radioButtonOriginalBoth)
+
+        self.radioButtonOriginalSheet = QRadioButton(self.widget)
+        self.radioButtonOriginalSheet.setObjectName(u"radioButtonOriginalSheet")
+
+        self.verticalLayout.addWidget(self.radioButtonOriginalSheet)
+
         MainWindow.setCentralWidget(self.centralwidget)
         self.grpSavePath.raise_()
         self.progressBar.raise_()
@@ -205,6 +235,7 @@ class Ui_MainWindow(object):
         self.groupBox.raise_()
         self.groupBox_3.raise_()
         self.btnStart.raise_()
+        self.groupBox_4.raise_()
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
         self.menubar.setGeometry(QRect(0, 0, 796, 23))
@@ -261,6 +292,9 @@ class Ui_MainWindow(object):
         self.checkBoxEmptyrow.setText(QCoreApplication.translate("MainWindow", u"\ud589", None))
         self.checkBoxEmptyColumn.setText(QCoreApplication.translate("MainWindow", u"\uc5f4", None))
         self.btnStart.setText(QCoreApplication.translate("MainWindow", u"\uc791\uc5c5 \uc2dc\uc791(F5)", None))
+        self.groupBox_4.setTitle(QCoreApplication.translate("MainWindow", u"\uc2dc\ud2b8 \uc774\ub984 \uaddc\uce59", None))
+        self.radioButtonOriginalBoth.setText(QCoreApplication.translate("MainWindow", u"\uc6d0\ubcf8\ud30c\uc77c\uba85_\uc6d0\ubcf8\uc2dc\ud2b8\uba85", None))
+        self.radioButtonOriginalSheet.setText(QCoreApplication.translate("MainWindow", u"\uc6d0\ubcf8\uc2dc\ud2b8\uba85", None))
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"\ud30c\uc77c", None))
         self.menu_2.setTitle(QCoreApplication.translate("MainWindow", u"\uc635\uc158", None))
     # retranslateUi
