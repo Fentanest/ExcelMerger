@@ -823,9 +823,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     continue
                 
                 original_path = os.path.abspath(info['original_path'])
+                
+                # Retrieve password for the file
+                password = self.file_passwords.get(file_name) or self.global_password
 
                 try:
-                    source_workbook = excel.Workbooks.Open(original_path)
+                    if password:
+                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
+                        source_workbook = excel.Workbooks.Open(original_path, Password=password)
+                    else:
+                        source_workbook = excel.Workbooks.Open(original_path)
+                    
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
                     # Copy sheet to the end of the merged workbook
@@ -846,7 +854,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     # Ignore error if sheet is already gone or name is different
                     pass
 
+            # Suppress alerts to automatically overwrite existing files
+            excel.DisplayAlerts = False # <--- Add this line
             merged_workbook.SaveAs(os.path.abspath(save_path))
+            excel.DisplayAlerts = True # <--- Restore alerts after saving
             merged_workbook.Close(SaveChanges=False)
 
         except Exception as e:
