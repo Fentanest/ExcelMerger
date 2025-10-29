@@ -860,7 +860,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                             self.file_info[basename]['processed_path'] = new_path
 
             if merge_type == 'Sheet':
-                if use_win32_merge and not self.options['only_value_copy']: # Only use win32 merge if not in only_value_copy mode
+                if use_win32_merge: # Use win32 merge if available, regardless of only_value_copy
                     self.merge_as_sheets_win32(sheets_to_merge, save_path)
                 else:
                     self.merge_as_sheets(sheets_to_merge, save_path)
@@ -965,7 +965,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if self.options['only_value_copy']:
                 self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
                 for ws in merged_workbook.Worksheets:
-                    ws.UsedRange.Value = ws.UsedRange.Value
+                    # Get the used range of the worksheet
+                    used_range = ws.UsedRange
+                    # Copy the used range
+                    used_range.Copy()
+                    # Paste special values to the same range
+                    used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
+                    # Clear the clipboard
+                    excel.CutCopyMode = False
 
             # Suppress alerts to automatically overwrite existing files
             excel.DisplayAlerts = False # <--- Add this line
@@ -1154,6 +1161,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             self.progressBar.setValue(int((i + 1) / total_sheets * 100))
             QApplication.processEvents()
+
+        if self.options['only_value_copy']:
+            self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중 (openpyxl)...")
+            for sheet in output_workbook.worksheets:
+                for row in sheet.iter_rows():
+                    for cell in row:
+                        if cell.data_type == 'f':
+                            cell.value = cell.value
 
         output_workbook.save(save_path)
 
