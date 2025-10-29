@@ -1,0 +1,6 @@
+PySide6==6.10.0
+openpyxl==3.1.5
+xlrd==2.0.2
+msoffcrypto-tool
+cryptography
+pywin32; sys_platform == 'win32'
