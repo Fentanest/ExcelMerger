@@ -24,7 +24,7 @@ class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
-        Dialog.resize(347, 300)
+        Dialog.resize(340, 310)
         font = QFont()
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
@@ -49,7 +49,7 @@ class Ui_Dialog(object):
 "\n"
 "/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
 "QRadioButton::indicator:unchecked {\n"
-"background-color: gray;\n"
+"background-color: white;\n"
 "border: 2px solid white;\n"
 "}\n"
 "/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
@@ -59,13 +59,13 @@ class Ui_Dialog(object):
 "}")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setGeometry(QRect(70, 260, 170, 32))
+        self.buttonBox.setGeometry(QRect(70, 270, 170, 32))
         self.buttonBox.setFont(font)
         self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
         self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
         self.groupBox = QGroupBox(Dialog)
         self.groupBox.setObjectName(u"groupBox")
-        self.groupBox.setGeometry(QRect(10, 100, 200, 70))
+        self.groupBox.setGeometry(QRect(10, 110, 200, 70))
         self.groupBox.setFont(font)
         self.layoutWidget = QWidget(self.groupBox)
         self.layoutWidget.setObjectName(u"layoutWidget")
@@ -94,7 +94,7 @@ class Ui_Dialog(object):
 
         self.groupBox_3 = QGroupBox(Dialog)
         self.groupBox_3.setObjectName(u"groupBox_3")
-        self.groupBox_3.setGeometry(QRect(10, 180, 320, 71))
+        self.groupBox_3.setGeometry(QRect(10, 190, 320, 71))
         self.groupBox_3.setFont(font)
         self.layoutWidget1 = QWidget(self.groupBox_3)
         self.layoutWidget1.setObjectName(u"layoutWidget1")

@@ -16,11 +16,11 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QGroupBox, QHBoxLayout,
-    QLabel, QLineEdit, QListView, QMainWindow,
-    QMenu, QMenuBar, QProgressBar, QPushButton,
-    QRadioButton, QSizePolicy, QStatusBar, QTextBrowser,
-    QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QGroupBox,
+    QHBoxLayout, QLabel, QLineEdit, QListView,
+    QMainWindow, QMenu, QMenuBar, QProgressBar,
+    QPushButton, QRadioButton, QSizePolicy, QStatusBar,
+    QTextBrowser, QWidget)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -49,7 +49,7 @@ class Ui_MainWindow(object):
 "\n"
 "/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
 "QRadioButton::indicator:unchecked {\n"
-"background-color: gray;\n"
+"background-color: white;\n"
 "border: 2px solid white;\n"
 "}\n"
 "/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
@@ -81,7 +81,7 @@ class Ui_MainWindow(object):
         self.centralwidget.setObjectName(u"centralwidget")
         self.progressBar = QProgressBar(self.centralwidget)
         self.progressBar.setObjectName(u"progressBar")
-        self.progressBar.setGeometry(QRect(660, 560, 120, 23))
+        self.progressBar.setGeometry(QRect(590, 560, 190, 23))
         self.progressBar.setFont(font)
         self.progressBar.setValue(0)
         self.grpFile = QGroupBox(self.centralwidget)
@@ -136,19 +136,23 @@ class Ui_MainWindow(object):
         self.grpSavePath.setFont(font)
         self.btnBrowsePath = QPushButton(self.grpSavePath)
         self.btnBrowsePath.setObjectName(u"btnBrowsePath")
-        self.btnBrowsePath.setGeometry(QRect(660, 40, 94, 26))
+        self.btnBrowsePath.setGeometry(QRect(550, 30, 94, 26))
         self.btnBrowsePath.setFont(font)
         self.lineEditSavePath = QLineEdit(self.grpSavePath)
         self.lineEditSavePath.setObjectName(u"lineEditSavePath")
-        self.lineEditSavePath.setGeometry(QRect(20, 40, 631, 26))
+        self.lineEditSavePath.setGeometry(QRect(20, 30, 520, 26))
         self.lineEditSavePath.setFont(font)
+        self.btnOpenPath = QPushButton(self.grpSavePath)
+        self.btnOpenPath.setObjectName(u"btnOpenPath")
+        self.btnOpenPath.setGeometry(QRect(660, 30, 94, 26))
+        self.btnOpenPath.setFont(font)
         self.txtLogOutput = QTextBrowser(self.centralwidget)
         self.txtLogOutput.setObjectName(u"txtLogOutput")
         self.txtLogOutput.setGeometry(QRect(10, 600, 771, 192))
         self.txtLogOutput.setFont(font)
         self.lblCurrentFile = QLabel(self.centralwidget)
         self.lblCurrentFile.setObjectName(u"lblCurrentFile")
-        self.lblCurrentFile.setGeometry(QRect(10, 560, 641, 18))
+        self.lblCurrentFile.setGeometry(QRect(10, 560, 570, 18))
         self.lblCurrentFile.setFont(font)
         self.groupBox_2 = QGroupBox(self.centralwidget)
         self.groupBox_2.setObjectName(u"groupBox_2")
@@ -196,6 +200,9 @@ class Ui_MainWindow(object):
         self.btnStart.setObjectName(u"btnStart")
         self.btnStart.setGeometry(QRect(695, 400, 90, 60))
         self.btnStart.setFont(font)
+        self.checkBoxOnlyValue = QCheckBox(self.centralwidget)
+        self.checkBoxOnlyValue.setObjectName(u"checkBoxOnlyValue")
+        self.checkBoxOnlyValue.setGeometry(QRect(620, 420, 70, 23))
         MainWindow.setCentralWidget(self.centralwidget)
         self.grpSavePath.raise_()
         self.progressBar.raise_()
@@ -208,6 +215,7 @@ class Ui_MainWindow(object):
         self.lblCurrentFile.raise_()
         self.groupBox_2.raise_()
         self.btnStart.raise_()
+        self.checkBoxOnlyValue.raise_()
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
         self.menubar.setGeometry(QRect(0, 0, 796, 23))
@@ -251,7 +259,7 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(shortcut)
         self.actionSetOutputEncryption.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+C", None))
 #endif // QT_CONFIG(shortcut)
-        self.actionOptions.setText(QCoreApplication.translate("MainWindow", u"\ud658\uacbd\uc124\uc815(Alt+O)", None))
+        self.actionOptions.setText(QCoreApplication.translate("MainWindow", u"\ud658\uacbd\uc124\uc815", None))
 #if QT_CONFIG(tooltip)
         self.actionOptions.setToolTip(QCoreApplication.translate("MainWindow", u"\ud658\uacbd\uc124\uc815", None))
 #endif // QT_CONFIG(tooltip)
@@ -264,7 +272,8 @@ class Ui_MainWindow(object):
         self.btnSheetToMergeAdd.setText(QCoreApplication.translate("MainWindow", u"\u25b6", None))
         self.btnSheetToMergeRemove.setText(QCoreApplication.translate("MainWindow", u"\u25c0", None))
         self.grpSavePath.setTitle(QCoreApplication.translate("MainWindow", u"\uc800\uc7a5 \uc704\uce58", None))
-        self.btnBrowsePath.setText(QCoreApplication.translate("MainWindow", u"\ucc3e\uc544\ubcf4\uae30", None))
+        self.btnBrowsePath.setText(QCoreApplication.translate("MainWindow", u"\uacbd\ub85c \uc9c0\uc815", None))
+        self.btnOpenPath.setText(QCoreApplication.translate("MainWindow", u"\uacbd\ub85c \uc5f4\uae30", None))
         self.lblCurrentFile.setText("")
         self.groupBox_2.setTitle(QCoreApplication.translate("MainWindow", u"\uc77c\uad04\ucc98\ub9ac", None))
         self.radioButtonAll.setText(QCoreApplication.translate("MainWindow", u"\ubaa8\ub4e0 \uc2dc\ud2b8", None))
@@ -276,6 +285,7 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(shortcut)
         self.btnStart.setShortcut(QCoreApplication.translate("MainWindow", u"F5", None))
 #endif // QT_CONFIG(shortcut)
+        self.checkBoxOnlyValue.setText(QCoreApplication.translate("MainWindow", u"\uac12\ubcf5\uc0ac", None))
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"\ud30c\uc77c", None))
         self.menu_2.setTitle(QCoreApplication.translate("MainWindow", u"\uc635\uc158", None))
     # retranslateUi

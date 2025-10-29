@@ -19,6 +19,7 @@ from cryptography.fernet import Fernet
 import io
 import sys
 import tempfile
+import subprocess
 
 if sys.platform == 'win32':
     try:
@@ -111,7 +112,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             'sheet_name_rule': 'OriginalBoth',
             'sheet_trim_value': 0,
             'sheet_trim_rows': False,
-            'sheet_trim_cols': False
+            'sheet_trim_cols': False,
+            'only_value_copy': False # New option for copying only values
         }
 
         # Settings and Encryption
@@ -170,6 +172,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listSheetToMerge.doubleClicked.connect(self.remove_sheet_from_merge)
 
         self.btnBrowsePath.clicked.connect(self.browse_save_path)
+        self.btnOpenPath.clicked.connect(self.open_save_path_directory) # New connection
         self.actionSetSavePath.triggered.connect(self.browse_save_path)
 
         # Radio button connections for sheet selection
@@ -203,6 +206,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Load settings and log initial state
         self.load_settings()
+
+        # Connect checkBoxOnlyValue and set initial state
+        self.checkBoxOnlyValue.setChecked(self.options['only_value_copy'])
+        self.checkBoxOnlyValue.toggled.connect(self.on_only_value_copy_toggled)
 
     def closeEvent(self, event):
         # Clean up temporary files
@@ -275,6 +282,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.options['sheet_trim_value'] = config['Options'].getint('sheet_trim_value', 0)
             self.options['sheet_trim_rows'] = config['Options'].getboolean('sheet_trim_rows', False)
             self.options['sheet_trim_cols'] = config['Options'].getboolean('sheet_trim_cols', False)
+            self.options['only_value_copy'] = config['Options'].getboolean('only_value_copy', False) # Load new option
 
         if 'Paths' in config and 'last_save_path' in config['Paths']:
             self.lineEditSavePath.setText(config['Paths']['last_save_path'])
@@ -342,11 +350,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("옵션이 업데이트되었습니다.")
             self.save_settings()
 
-    def _open_workbook(self, file_path, file_name):
+    def on_only_value_copy_toggled(self, checked):
+        self.options['only_value_copy'] = checked
+        self.save_settings()
+
+    def _open_workbook(self, file_path, file_name, data_only=False): # Add data_only flag
         try:
             if file_path.endswith('.xlsx'):
-                return openpyxl.load_workbook(file_path, read_only=False)
+                return openpyxl.load_workbook(file_path, read_only=False, data_only=data_only) # Use data_only flag
             elif file_path.endswith('.xls'):
+                # xlrd does not have a direct equivalent of data_only=True when opening.
+                # It always reads the calculated values.
                 return xlrd.open_workbook(file_path, formatting_info=True)
         except Exception as e:
             self.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
@@ -577,6 +591,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.lineEditSavePath.setText(save_path)
             self.save_settings()
 
+    def open_save_path_directory(self):
+        path = self.lineEditSavePath.text()
+        if not path:
+            self.txtLogOutput.append("저장 경로가 지정되지 않았습니다.")
+            return
+
+        directory = os.path.dirname(path)
+        if not os.path.isdir(directory):
+            self.txtLogOutput.append(f"디렉토리를 찾을 수 없습니다: {directory}")
+            return
+
+        try:
+            if sys.platform == 'win32':
+                os.startfile(directory)
+            elif sys.platform == 'darwin': # macOS
+                subprocess.run(['open', directory])
+            else: # Linux
+                subprocess.run(['xdg-open', directory])
+        except Exception as e:
+            self.txtLogOutput.append(f"디렉토리를 열 수 없습니다: {e}")
+
     def update_sheet_selection_mode(self):
         is_choice_mode = self.radioButtonChoice.isChecked()
 
@@ -687,6 +722,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     office_file.load_key(password=self.global_password)
                     office_file.decrypt(decrypted_file_buffer)
                 password = self.global_password
+                self.file_passwords[basename] = self.global_password # Store password for the file
                 self.txtLogOutput.append("전역 비밀번호로 열기 성공.")
             except Exception as e:
                 self.txtLogOutput.append(f"전역 비밀번호 실패: {e}")
@@ -719,7 +755,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         # Remember password for this file
                         self.file_passwords[basename] = user_password
                         if dialog.chkKeepPassword.isChecked():
-                            self.global_password = user_password # Temporarily keep password
+                            self.global_password = user_password
+                            self.use_global_password = True # Enable using the global password
                     except Exception as e:
                         self.txtLogOutput.append(f"사용자 입력 비밀번호 실패: {e}")
                         self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (user password failed).") # ADD LOG
@@ -763,7 +800,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             merge_type = self.options.get('merge_type', 'Sheet')
 
-            if merge_type != 'Sheet' and sys.platform == 'win32' and win32:
+            # Check if win32com is available and Excel is installed for high-quality merge
+            use_win32_merge = False
+            if sys.platform == 'win32' and win32:
+                try:
+                    # Attempt to dispatch Excel application to check if it's installed
+                    excel_app_check = win32.gencache.EnsureDispatch('Excel.Application')
+                    excel_app_check.Quit() # Quit immediately after checking
+                    use_win32_merge = True
+                except Exception as e:
+                    self.txtLogOutput.append(f"Excel 애플리케이션을 찾을 수 없습니다. 고품질 병합을 건너뜁니다: {e}")
+                    use_win32_merge = False
+
+            if merge_type != 'Sheet' and use_win32_merge:
                 self.txtLogOutput.append("고품질 병합을 위해 .xls 파일을 .xlsx로 변환합니다...")
                 for basename, info in self.file_info.items():
                     if info['original_path'].endswith('.xls'):
@@ -772,7 +821,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                             self.file_info[basename]['processed_path'] = new_path
 
             if merge_type == 'Sheet':
-                if sys.platform == 'win32' and win32:
+                if use_win32_merge and not self.options['only_value_copy']: # Only use win32 merge if not in only_value_copy mode
                     self.merge_as_sheets_win32(sheets_to_merge, save_path)
                 else:
                     self.merge_as_sheets(sheets_to_merge, save_path)
@@ -825,7 +874,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 original_path = os.path.abspath(info['original_path'])
                 
                 # Retrieve password for the file
-                password = self.file_passwords.get(file_name) or self.global_password
+                password = self.file_passwords.get(file_name)
 
                 try:
                     if password:
@@ -838,6 +887,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     
                     # Copy sheet to the end of the merged workbook
                     source_sheet.Copy(After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count))
+                    
+                    # Get the newly copied sheet
+                    newly_copied_sheet = merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+
+                    if self.options['only_value_copy']:
+                        self.txtLogOutput.append(f"DEBUG: {item} 시트 값만 복사 (Win32, 서식 유지)...")
+                        # Copy values only, preserving formatting
+                        # This involves copying the used range of the source sheet
+                        # and pasting values to the newly copied sheet.
+                        source_range = source_sheet.UsedRange
+                        source_range.Copy()
+                        newly_copied_sheet.Paste(Destination=newly_copied_sheet.Range(source_range.Address), Paste=win32.constants.xlPasteValues)
+                        # Clear the clipboard
+                        excel.CutCopyMode = False
                     
                     source_workbook.Close(SaveChanges=False)
                 except Exception as e:
@@ -880,7 +943,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             try:
-                source_workbook = self._open_workbook(file_path, file_name)
+                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy']) # Pass data_only flag
                 if not source_workbook:
                     continue
 
@@ -940,7 +1003,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             try:
-                source_workbook = self._open_workbook(file_path, file_name)
+                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy'])
                 if not source_workbook:
                     continue
 
@@ -978,7 +1041,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             try:
-                source_workbook = self._open_workbook(file_path, file_name)
+                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy']) # Pass data_only flag
                 if not source_workbook:
                     continue
 

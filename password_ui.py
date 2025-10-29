@@ -48,7 +48,7 @@ class Ui_Dialog(object):
 "\n"
 "/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
 "QRadioButton::indicator:unchecked {\n"
-"background-color: gray;\n"
+"background-color: white;\n"
 "border: 2px solid white;\n"
 "}\n"
 "/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
