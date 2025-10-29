@@ -348,29 +348,40 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             elif file_path.endswith('.xls'):
                 return xlrd.open_workbook(file_path, formatting_info=True)
         except Exception as e:
-            if 'encrypted' in str(e).lower() or 'zip' in str(e).lower():
-                password = self.file_passwords.get(file_name) or self.global_password
-                if password:
-                    try:
-                        decrypted_file = io.BytesIO()
-                        with open(file_path, 'rb') as f:
-                            office_file = msoffcrypto.OfficeFile(f)
-                            office_file.load_key(password=password)
-                            office_file.decrypt(decrypted_file)
-                        
-                        decrypted_file.seek(0)
-                        if file_path.endswith('.xlsx'):
-                            return openpyxl.load_workbook(decrypted_file)
-                        elif file_path.endswith('.xls'):
-                            return xlrd.open_workbook(file_contents=decrypted_file.read(), formatting_info=True)
-                    except Exception as decrypt_error:
-                        self.txtLogOutput.append(f"암호화 해제 실패 {file_name}: {decrypt_error}")
-                        return None
-                else:
-                    self.txtLogOutput.append(f"암호화된 파일의 비밀번호를 찾을 수 없습니다: {file_name}")
+            self.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
+            return None
+        return None
+
+    def get_sheet_names(self, file_path):
+        file_name = os.path.basename(file_path)
+        workbook = self._open_workbook(file_path, file_name)
+        
+        original_file_path = file_path # Keep track of the original path
+
+        if workbook is None:
+            # If _open_workbook failed, try to handle it as an encrypted file
+            decrypted_temp_path = self.handle_encrypted_file(original_file_path)
+            if decrypted_temp_path:
+                # If successfully decrypted, try to open the workbook again with the temp file
+                workbook = self._open_workbook(decrypted_temp_path, file_name)
+                file_path = decrypted_temp_path # Update file_path to the decrypted one for sheet name extraction
+                if workbook is None:
+                    self.txtLogOutput.append(f"암호 해독된 파일 열기 실패: {file_name}")
                     return None
             else:
-                self.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
+                # If handle_encrypted_file also failed or user cancelled
+                self.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
+                return None
+
+        # If we have a workbook (either original or decrypted temp), get sheet names
+        if workbook:
+            try:
+                if file_path.endswith('.xlsx'):
+                    return workbook.sheetnames
+                elif file_path.endswith('.xls'):
+                    return workbook.sheet_names()
+            except Exception as e:
+                self.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
                 return None
         return None
 
@@ -638,12 +649,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def handle_encrypted_file(self, file_path):
         if self.stop_asking_for_passwords:
             self.txtLogOutput.append(f"비밀번호 입력을 중단하여 파일을 건너뜁니다: {os.path.basename(file_path)}")
+            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (stopped asking).") # ADD LOG
             return None
 
         self.txtLogOutput.append(f"암호화된 파일 감지: {os.path.basename(file_path)}")
         password = None
-        decrypted_file = io.BytesIO()
+        decrypted_file_buffer = None # Initialize to None
         basename = os.path.basename(file_path)
+        temp_decrypted_path = None
 
         # Password check order: 1. File-specific, 2. Global, 3. User prompt
 
@@ -651,51 +664,55 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if basename in self.file_passwords:
             try:
                 self.txtLogOutput.append(f'{basename}에 대해 기억된 비밀번호로 열기 시도...')
+                decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
                 with open(file_path, 'rb') as f:
-                    file = msoffcrypto.OfficeFile(f)
-                    file.load_key(password=self.file_passwords[basename])
-                    file.decrypt(decrypted_file)
+                    office_file = msoffcrypto.OfficeFile(f)
+                    office_file.load_key(password=self.file_passwords[basename])
+                    office_file.decrypt(decrypted_file_buffer)
                 password = self.file_passwords[basename]
                 self.txtLogOutput.append("기억된 비밀번호로 열기 성공.")
             except Exception:
                 self.txtLogOutput.append("기억된 비밀번호 실패.")
-                decrypted_file.seek(0)
+                decrypted_file_buffer = None # Indicate failure to get decrypted content
 
         # 2. Try global password
         if not password and self.use_global_password and self.global_password:
             try:
                 self.txtLogOutput.append("전역 비밀번호로 열기 시도...")
+                decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
                 with open(file_path, 'rb') as f:
-                    file = msoffcrypto.OfficeFile(f)
-                    file.load_key(password=self.global_password)
-                    file.decrypt(decrypted_file)
+                    office_file = msoffcrypto.OfficeFile(f)
+                    office_file.load_key(password=self.global_password)
+                    office_file.decrypt(decrypted_file_buffer)
                 password = self.global_password
                 self.txtLogOutput.append("전역 비밀번호로 열기 성공.")
             except Exception as e:
                 self.txtLogOutput.append(f"전역 비밀번호 실패: {e}")
-                decrypted_file.seek(0)
+                decrypted_file_buffer = None # Indicate failure to get decrypted content
 
         # 3. If all else fails, ask user
-        if not password:
+        if not password: # This condition is key. If password is set by file-specific or global, this block is skipped.
+            self.txtLogOutput.append(f"DEBUG: Showing PasswordDialog for {basename}.") # ADD LOG
             dialog = PasswordDialog(basename, self)
             result = dialog.exec()
 
             if dialog.stopped:
                 self.stop_asking_for_passwords = True
                 self.txtLogOutput.append("사용자가 중단하여 이후 암호 입력을 건너뜁니다.")
+                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog stopped).") # ADD LOG
                 return None
 
-            if result:
+            if result: # User clicked OK
                 user_password = dialog.lineEditKeepPassword.text()
                 if user_password:
                     try:
                         self.txtLogOutput.append("사용자 입력 비밀번호로 열기 시도...")
-                        decrypted_file = io.BytesIO() # Reset buffer
+                        decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
                         with open(file_path, 'rb') as f:
-                            file = msoffcrypto.OfficeFile(f)
-                            file.load_key(password=user_password)
-                            file.decrypt(decrypted_file)
-                        password = user_password
+                            office_file = msoffcrypto.OfficeFile(f)
+                            office_file.load_key(password=user_password)
+                            office_file.decrypt(decrypted_file_buffer)
+                        password = user_password # Password is now set
                         self.txtLogOutput.append("사용자 입력 비밀번호로 열기 성공.")
                         # Remember password for this file
                         self.file_passwords[basename] = user_password
@@ -703,13 +720,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                             self.global_password = user_password # Temporarily keep password
                     except Exception as e:
                         self.txtLogOutput.append(f"사용자 입력 비밀번호 실패: {e}")
-                        return None
+                        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (user password failed).") # ADD LOG
+                        return None # Decryption failed with user password
                 else:
                     self.txtLogOutput.append("비밀번호가 입력되지 않아 파일을 건너뜁니다.")
-                    return None
-            else: # User cancelled
+                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (empty user password).") # ADD LOG
+                    return None # User didn't enter password
+            else: # User cancelled the dialog
                 self.txtLogOutput.append("사용자가 취소하여 파일을 건너뜁니다.")
+                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog cancelled).") # ADD LOG
                 return None
+
+        # If we have a password (meaning decryption was successful at some point)
+        if password and decrypted_file_buffer: # Check if buffer is not None
+            fd, temp_decrypted_path = tempfile.mkstemp(suffix=os.path.splitext(file_path)[1], prefix='decrypted_')
+            os.close(fd)
+            with open(temp_decrypted_path, 'wb') as tmp_f:
+                tmp_f.write(decrypted_file_buffer.getbuffer())
+            self.temp_files.append(temp_decrypted_path)
+            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning decrypted path: {temp_decrypted_path}") # ADD LOG
+            return temp_decrypted_path
+        
+        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (no password worked).") # ADD LOG
+        return None # Should only be reached if no password worked or user cancelled
 
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
