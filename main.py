@@ -35,6 +35,12 @@ class PasswordDialog(QDialog, Ui_PasswordDialog):
         super().__init__(parent)
         self.setupUi(self)
         self.textEditOpenFile.setText(file_name)
+        self.btnStop.clicked.connect(self.on_stop_clicked)
+        self.stopped = False
+
+    def on_stop_clicked(self):
+        self.stopped = True
+        self.reject()
 
 class GlobalPasswordDialog(QDialog, Ui_GlobalPasswordDialog):
     def __init__(self, parent=None):
@@ -115,6 +121,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.output_encryption_password = ""
         self.use_global_password = False
         self.encrypt_output = False
+        self.stop_asking_for_passwords = False
 
         # File paths management
         self.file_info = {}
@@ -138,7 +145,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listFileAdded.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.listFileAdded.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.listFileAdded.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.listFileAdded.setAcceptDrops(True) # Allow dropping files
+        self.listFileAdded.setAcceptDrops(False) # Allow dropping files
 
         self.listSheetInFile.setDragEnabled(True)
         self.listSheetInFile.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -460,45 +467,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.merge_list_model.setStringList(current_merge_list)
         event.acceptProposedAction()
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        if event.mimeData().hasUrls():
-            files = [url.toLocalFile() for url in event.mimeData().urls()]
-            self.add_files(files)
-            event.acceptProposedAction()
-        else:
-            event.ignore()
-
     def add_files(self, files):
         for file in files:
             basename = os.path.basename(file)
             if basename in self.file_info: # Skip duplicates
                 continue
 
-            original_path = file
-            processed_path = file
-
-            if file.endswith('.xls') and sys.platform == 'win32' and win32:
-                new_path = self.convert_xls_to_xlsx_win32(file)
-                if new_path:
-                    processed_path = new_path
-            
             if file.endswith('.xlsx') or file.endswith('.xls'):
-                self.file_info[basename] = {
-                    'original_path': original_path,
-                    'processed_path': processed_path
-                }
+                sheet_names = self.get_sheet_names(file)
+
+                if sheet_names is not None:
+                    self.file_info[basename] = {
+                        'original_path': file,
+                        'processed_path': file, # Initially same as original
+                        'sheets': sheet_names
+                    }
+                else:
+                    self.txtLogOutput.append(f"파일을 열 수 없어 목록에서 제외합니다: {basename}")
 
         self.file_list_model.setStringList(list(self.file_info.keys()))
 
 
     def add_excel_file(self):
-        files, _ = QFileDialog.getOpenFileNames(self, "Select Excel Files", "", "Excel Files (*.xlsx *.xls)")
+        self.txtLogOutput.append("add_excel_file triggered")
+        files, _ = QFileDialog.getOpenFileNames(self, "ADD EXCEL FILES DIALOG", "", "Excel Files (*.xlsx *.xls)")
         if files:
             self.add_files(files)
 
@@ -525,32 +517,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         info = self.file_info.get(basename)
         if info:
             self.current_selected_file_path = info['processed_path']
-            self.load_sheets(info['processed_path'])
+            self.load_sheets(basename)
 
-    def load_sheets(self, file_path):
-        sheet_names = []
-        try:
-            # This part is for non-encrypted files
-            if file_path.endswith('.xlsx'):
-                workbook = openpyxl.load_workbook(file_path, read_only=True)
-                sheet_names = workbook.sheetnames
-            elif file_path.endswith('.xls'):
-                workbook = xlrd.open_workbook(file_path)
-                sheet_names = workbook.sheet_names()
-            else:
-                self.sheet_list_model.setStringList([])
-                return
-        except xlrd.biffh.XLRDError as e:
-            if 'encrypted' in str(e).lower():
-                sheet_names = self.handle_encrypted_file(file_path)
-            else:
-                self.txtLogOutput.append(f"시트 로딩 오류 {os.path.basename(file_path)}: {e}")
-        except Exception as e: # Broad exception for openpyxl and other issues
-            if 'encrypted' in str(e).lower() or 'zip' in str(e).lower() or 'msoffice' in str(e).lower():
-                 sheet_names = self.handle_encrypted_file(file_path)
-            else:
-                self.txtLogOutput.append(f"시트 로딩 오류 {os.path.basename(file_path)}: {e}")
-        
+    def load_sheets(self, basename):
+        info = self.file_info.get(basename)
+        sheet_names = info.get('sheets') if info else None
         self.sheet_list_model.setStringList(sheet_names if sheet_names else [])
 
 
@@ -631,23 +602,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             pass
 
     def populate_all_sheets(self):
+        self.stop_asking_for_passwords = False
         all_sheets_to_merge = []
         for file_name, info in self.file_info.items():
-            file_path = info['processed_path']
-            sheet_names = []
-            try:
-                if file_path.endswith('.xlsx'):
-                    workbook = openpyxl.load_workbook(file_path, read_only=True)
-                    sheet_names = workbook.sheetnames
-                elif file_path.endswith('.xls'):
-                    workbook = xlrd.open_workbook(file_path)
-                    sheet_names = workbook.sheet_names()
-            except Exception as e:
-                if 'encrypted' in str(e).lower() or 'zip' in str(e).lower() or 'msoffice' in str(e).lower():
-                    sheet_names = self.handle_encrypted_file(file_path)
-                else:
-                    self.txtLogOutput.append(f"시트 로딩 오류 {file_name}: {e}")
-            
+            sheet_names = info.get('sheets')
             if sheet_names:
                 for sheet_name in sheet_names:
                     all_sheets_to_merge.append(f"{file_name}/{sheet_name}")
@@ -655,6 +613,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.merge_list_model.setStringList(all_sheets_to_merge)
 
     def populate_specific_sheets(self):
+        self.stop_asking_for_passwords = False
         sheet_indices_str = self.lineEditSheetSpecific.text()
         if not sheet_indices_str:
             self.merge_list_model.setStringList([])
@@ -668,21 +627,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         specific_sheets_to_merge = []
         for file_name, info in self.file_info.items():
-            file_path = info['processed_path']
-            sheet_names = []
-            try:
-                if file_path.endswith('.xlsx'):
-                    workbook = openpyxl.load_workbook(file_path, read_only=True)
-                    sheet_names = workbook.sheetnames
-                elif file_path.endswith('.xls'):
-                    workbook = xlrd.open_workbook(file_path)
-                    sheet_names = workbook.sheet_names()
-            except Exception as e:
-                if 'encrypted' in str(e).lower() or 'zip' in str(e).lower() or 'msoffice' in str(e).lower():
-                    sheet_names = self.handle_encrypted_file(file_path)
-                else:
-                    self.txtLogOutput.append(f"시트 로딩 오류 {file_name}: {e}")
-
+            sheet_names = info.get('sheets')
             if sheet_names:
                 for index in sheet_indices:
                     if 0 <= index < len(sheet_names):
@@ -691,6 +636,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.merge_list_model.setStringList(specific_sheets_to_merge)
 
     def handle_encrypted_file(self, file_path):
+        if self.stop_asking_for_passwords:
+            self.txtLogOutput.append(f"비밀번호 입력을 중단하여 파일을 건너뜁니다: {os.path.basename(file_path)}")
+            return None
+
         self.txtLogOutput.append(f"암호화된 파일 감지: {os.path.basename(file_path)}")
         password = None
         decrypted_file = io.BytesIO()
@@ -729,7 +678,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 3. If all else fails, ask user
         if not password:
             dialog = PasswordDialog(basename, self)
-            if dialog.exec():
+            result = dialog.exec()
+
+            if dialog.stopped:
+                self.stop_asking_for_passwords = True
+                self.txtLogOutput.append("사용자가 중단하여 이후 암호 입력을 건너뜁니다.")
+                return None
+
+            if result:
                 user_password = dialog.lineEditKeepPassword.text()
                 if user_password:
                     try:
@@ -755,20 +711,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.txtLogOutput.append("사용자가 취소하여 파일을 건너뜁니다.")
                 return None
 
-        # 4. Load workbook from decrypted data
-        try:
-            decrypted_file.seek(0)
-            if file_path.endswith('.xlsx'):
-                workbook = openpyxl.load_workbook(decrypted_file, read_only=True)
-                sheet_names = workbook.sheetnames
-            elif file_path.endswith('.xls'):
-                workbook = xlrd.open_workbook(file_contents=decrypted_file.read())
-                sheet_names = workbook.sheet_names()
-            return sheet_names
-        except Exception as e:
-            self.txtLogOutput.append(f"복호화된 파일 로딩 실패: {e}")
-            return None
-
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
         if not sheets_to_merge:
@@ -785,6 +727,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         try:
             merge_type = self.options.get('merge_type', 'Sheet')
+
+            if merge_type != 'Sheet' and sys.platform == 'win32' and win32:
+                self.txtLogOutput.append("고품질 병합을 위해 .xls 파일을 .xlsx로 변환합니다...")
+                for basename, info in self.file_info.items():
+                    if info['original_path'].endswith('.xls'):
+                        new_path = self.convert_xls_to_xlsx_win32(info['original_path'])
+                        if new_path:
+                            self.file_info[basename]['processed_path'] = new_path
+
             if merge_type == 'Sheet':
                 if sys.platform == 'win32' and win32:
                     self.merge_as_sheets_win32(sheets_to_merge, save_path)

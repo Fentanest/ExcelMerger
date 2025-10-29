@@ -29,6 +29,10 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
+        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
+"    color: #ffffff;\n"
+"  font-family: \"Noto Sans\";\n"
+"  font-size: 9pt;")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(70, 260, 170, 32))
@@ -39,7 +43,7 @@ class Ui_Dialog(object):
         self.groupBox.setGeometry(QRect(10, 100, 181, 70))
         self.layoutWidget = QWidget(self.groupBox)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(12, 31, 155, 25))
+        self.layoutWidget.setGeometry(QRect(12, 31, 170, 29))
         self.horizontalLayout = QHBoxLayout(self.layoutWidget)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -61,38 +65,39 @@ class Ui_Dialog(object):
         self.groupBox_3 = QGroupBox(Dialog)
         self.groupBox_3.setObjectName(u"groupBox_3")
         self.groupBox_3.setGeometry(QRect(10, 180, 300, 71))
-        self.widget = QWidget(self.groupBox_3)
-        self.widget.setObjectName(u"widget")
-        self.widget.setGeometry(QRect(11, 28, 275, 28))
-        self.horizontalLayout_2 = QHBoxLayout(self.widget)
+        self.groupBox_3.setFont(font)
+        self.layoutWidget1 = QWidget(self.groupBox_3)
+        self.layoutWidget1.setObjectName(u"layoutWidget1")
+        self.layoutWidget1.setGeometry(QRect(11, 28, 280, 29))
+        self.horizontalLayout_2 = QHBoxLayout(self.layoutWidget1)
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
-        self.spinBoxEmpty = QSpinBox(self.widget)
+        self.spinBoxEmpty = QSpinBox(self.layoutWidget1)
         self.spinBoxEmpty.setObjectName(u"spinBoxEmpty")
 
         self.horizontalLayout_2.addWidget(self.spinBoxEmpty)
 
-        self.label_3 = QLabel(self.widget)
+        self.label_3 = QLabel(self.layoutWidget1)
         self.label_3.setObjectName(u"label_3")
 
         self.horizontalLayout_2.addWidget(self.label_3)
 
-        self.checkBoxEmptyrow = QCheckBox(self.widget)
+        self.checkBoxEmptyrow = QCheckBox(self.layoutWidget1)
         self.checkBoxEmptyrow.setObjectName(u"checkBoxEmptyrow")
 
         self.horizontalLayout_2.addWidget(self.checkBoxEmptyrow)
 
-        self.label = QLabel(self.widget)
+        self.label = QLabel(self.layoutWidget1)
         self.label.setObjectName(u"label")
 
         self.horizontalLayout_2.addWidget(self.label)
 
-        self.checkBoxEmptyColumn = QCheckBox(self.widget)
+        self.checkBoxEmptyColumn = QCheckBox(self.layoutWidget1)
         self.checkBoxEmptyColumn.setObjectName(u"checkBoxEmptyColumn")
 
         self.horizontalLayout_2.addWidget(self.checkBoxEmptyColumn)
 
-        self.label_2 = QLabel(self.widget)
+        self.label_2 = QLabel(self.layoutWidget1)
         self.label_2.setObjectName(u"label_2")
 
         self.horizontalLayout_2.addWidget(self.label_2)
@@ -102,7 +107,7 @@ class Ui_Dialog(object):
         self.groupBox_4.setGeometry(QRect(10, 10, 181, 90))
         self.layoutWidget_3 = QWidget(self.groupBox_4)
         self.layoutWidget_3.setObjectName(u"layoutWidget_3")
-        self.layoutWidget_3.setGeometry(QRect(11, 29, 142, 54))
+        self.layoutWidget_3.setGeometry(QRect(11, 29, 150, 60))
         self.verticalLayout = QVBoxLayout(self.layoutWidget_3)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)

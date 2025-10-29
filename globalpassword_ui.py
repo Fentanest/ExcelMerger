@@ -16,18 +16,21 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QDialog,
-    QDialogButtonBox, QLineEdit, QPushButton, QSizePolicy,
-    QWidget)
+    QDialogButtonBox, QLineEdit, QSizePolicy, QWidget)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
-        Dialog.resize(210, 167)
+        Dialog.resize(210, 136)
         font = QFont()
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
+        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
+"    color: #ffffff;\n"
+"  font-family: \"Noto Sans\";\n"
+"  font-size: 9pt;")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(20, 90, 170, 30))
@@ -43,9 +46,6 @@ class Ui_Dialog(object):
         self.lineEditGlobalPassword.setGeometry(QRect(20, 50, 170, 26))
         self.lineEditGlobalPassword.setMinimumSize(QSize(170, 26))
         self.lineEditGlobalPassword.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
-        self.btnStop = QPushButton(Dialog)
-        self.btnStop.setObjectName(u"btnStop")
-        self.btnStop.setGeometry(QRect(60, 130, 94, 26))
 
         self.retranslateUi(Dialog)
         self.buttonBox.accepted.connect(Dialog.accept)
@@ -57,6 +57,5 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
         self.chkGlobalPassword.setText(QCoreApplication.translate("Dialog", u"\uc804\uc5ed \uc554\ud638 \uc124\uc815", None))
-        self.btnStop.setText(QCoreApplication.translate("Dialog", u"\uc791\uc5c5 \uc911\ub2e8", None))
     # retranslateUi
 

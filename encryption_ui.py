@@ -27,6 +27,10 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
+        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
+"    color: #ffffff;\n"
+"  font-family: \"Noto Sans\";\n"
+"  font-size: 9pt;")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(20, 90, 170, 30))
