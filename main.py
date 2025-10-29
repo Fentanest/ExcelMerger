@@ -997,7 +997,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             output_sheet.Name = "Merged_Sheet"
 
             total_sheets = len(sheets_to_merge)
-            last_row = 0
+            last_col = 0
             for i, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split('/', 1)
                 self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
@@ -1010,15 +1010,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 
                 processed_path = os.path.abspath(info['processed_path'])
                 
-                # Retrieve password for the file
                 password = self.file_passwords.get(file_name)
 
                 try:
                     if password:
-                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
                     else:
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
+                    
+                    source_sheet = source_workbook.Worksheets(sheet_name)
+                    
+                    source_range = source_sheet.UsedRange
+                    if source_range.Columns.Count > 0:
+                        source_range.Copy()
+                        
+                        destination_range = output_sheet.Cells(1, last_col + 1)
+                        output_sheet.Paste(Destination=destination_range)
+                        
+                        last_col += source_range.Columns.Count
                     
                     source_workbook.Close(SaveChanges=False)
                 except Exception as e:
@@ -1026,6 +1035,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 
                 self.progressBar.setValue(int((i + 1) / total_sheets * 100))
                 QApplication.processEvents()
+
+            if self.options['only_value_copy']:
+                self.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
+                used_range = output_sheet.UsedRange
+                used_range.Copy()
+                used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
+                excel.CutCopyMode = False
 
             excel.DisplayAlerts = False
             output_workbook.SaveAs(os.path.abspath(save_path))
@@ -1049,7 +1065,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             output_sheet.Name = "Merged_Sheet"
 
             total_sheets = len(sheets_to_merge)
-            last_col = 0
+            last_row = 0
             for i, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split('/', 1)
                 self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
@@ -1062,7 +1078,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 
                 processed_path = os.path.abspath(info['processed_path'])
                 
-                # Retrieve password for the file
                 password = self.file_passwords.get(file_name)
 
                 try:
@@ -1075,19 +1090,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
                     source_range = source_sheet.UsedRange
-                    if source_range.Columns.Count > 0:
-                        # Copy the used range
+                    if source_range.Rows.Count > 0:
                         source_range.Copy()
                         
-                        # Paste to the output sheet
-                        destination_range = output_sheet.Cells(1, last_col + 1)
+                        destination_range = output_sheet.Cells(last_row + 1, 1)
                         if self.options['only_value_copy']:
                             destination_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
                             excel.CutCopyMode = False
                         else:
                             output_sheet.Paste(Destination=destination_range)
                         
-                        last_col += source_range.Columns.Count
+                        last_row += source_range.Rows.Count
                     
                     source_workbook.Close(SaveChanges=False)
                 except Exception as e:
@@ -1178,7 +1191,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         output_sheet.title = "Merged_Sheet"
 
         total_sheets = len(sheets_to_merge)
-        last_row = 0
+        last_col = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
             self.lblCurrentFile.setText(f'{item} 병합 중...')
@@ -1190,7 +1203,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             try:
-                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy'])
+                source_workbook = self._open_workbook(file_path, file_name, data_only=False) # Always load with formulas
                 if not source_workbook:
                     continue
 
@@ -1199,14 +1212,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
                 
-                self.copy_sheet_data(source_sheet, output_sheet, start_row=last_row + 1, file_name=file_name)
-                last_row = output_sheet.max_row
+                self.copy_sheet_data(source_sheet, output_sheet, start_col=last_col + 1, file_name=file_name)
+                last_col = output_sheet.max_column
 
             except Exception as e:
                 self.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
 
             self.progressBar.setValue(int((i + 1) / total_sheets * 100))
             QApplication.processEvents()
+
+        if self.options['only_value_copy']:
+            self.txtLogOutput.append("수식을 값으로 변환 중...")
+            for row in output_sheet.iter_rows():
+                for cell in row:
+                    if cell.data_type == 'f':
+                        cell.value = cell.value
 
         output_workbook.save(save_path)
 
@@ -1216,7 +1236,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         output_sheet.title = "Merged_Sheet"
 
         total_sheets = len(sheets_to_merge)
-        last_col = 0
+        last_row = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
             self.lblCurrentFile.setText(f'{item} 병합 중...')
@@ -1237,8 +1257,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
 
-                self.copy_sheet_data(source_sheet, output_sheet, start_col=last_col + 1, file_name=file_name)
-                last_col = output_sheet.max_column
+                self.copy_sheet_data(source_sheet, output_sheet, start_row=last_row + 1, file_name=file_name)
+                last_row = output_sheet.max_row
 
             except Exception as e:
                 self.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
