@@ -35,6 +35,7 @@ class PasswordDialog(QDialog, Ui_PasswordDialog):
         super().__init__(parent)
         self.setupUi(self)
         self.textEditOpenFile.setText(file_name)
+        self.lineEditKeepPassword.setFocus() # Set focus to the password input field
         self.btnStop.clicked.connect(self.on_stop_clicked)
         self.stopped = False
 
@@ -357,6 +358,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         workbook = self._open_workbook(file_path, file_name)
         
         original_file_path = file_path # Keep track of the original path
+        processed_file_path = original_file_path # Initialize processed_file_path
 
         if workbook is None:
             # If _open_workbook failed, try to handle it as an encrypted file
@@ -364,26 +366,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if decrypted_temp_path:
                 # If successfully decrypted, try to open the workbook again with the temp file
                 workbook = self._open_workbook(decrypted_temp_path, file_name)
-                file_path = decrypted_temp_path # Update file_path to the decrypted one for sheet name extraction
+                processed_file_path = decrypted_temp_path # Update processed_file_path
                 if workbook is None:
                     self.txtLogOutput.append(f"암호 해독된 파일 열기 실패: {file_name}")
-                    return None
+                    return None, None # Return None for both
             else:
                 # If handle_encrypted_file also failed or user cancelled
                 self.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
-                return None
+                return None, None # Return None for both
 
         # If we have a workbook (either original or decrypted temp), get sheet names
         if workbook:
             try:
-                if file_path.endswith('.xlsx'):
-                    return workbook.sheetnames
-                elif file_path.endswith('.xls'):
-                    return workbook.sheet_names()
+                if processed_file_path.endswith('.xlsx'): # Use processed_file_path here
+                    return workbook.sheetnames, processed_file_path
+                elif processed_file_path.endswith('.xls'): # Use processed_file_path here
+                    return workbook.sheet_names(), processed_file_path
             except Exception as e:
                 self.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
-                return None
-        return None
+                return None, None # Return None for both
+        return None, None # Should not be reached if workbook is valid
 
     def eventFilter(self, source, event):
 
@@ -485,12 +487,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             if file.endswith('.xlsx') or file.endswith('.xls'):
-                sheet_names = self.get_sheet_names(file)
+                sheet_names, processed_file_path = self.get_sheet_names(file)
 
-                if sheet_names is not None:
+                if sheet_names is not None and processed_file_path is not None:
                     self.file_info[basename] = {
                         'original_path': file,
-                        'processed_path': file, # Initially same as original
+                        'processed_path': processed_file_path, # Use the processed path
                         'sheets': sheet_names
                     }
                 else:
