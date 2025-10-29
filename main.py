@@ -226,23 +226,38 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if not win32:
             self.txtLogOutput.append("pywin32가 설치되지 않아 .xls 변환을 건너뜁니다.")
             return None
+        excel = None # Initialize excel to None
         try:
             excel = win32.gencache.EnsureDispatch('Excel.Application')
-            wb = excel.Workbooks.Open(os.path.abspath(xls_path))
+            excel.Visible = False # Keep it hidden
+            
+            file_name = os.path.basename(xls_path)
+            password = self.file_passwords.get(file_name)
+
+            if password:
+                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0, Password=password)
+            else:
+                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0)
             
             # Create a temporary file path for the xlsx file
             fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='excelmerger_')
             os.close(fd)
 
+            excel.DisplayAlerts = False
             wb.SaveAs(xlsx_path, FileFormat=51) # 51 is for xlsx format
+            excel.DisplayAlerts = True
             wb.Close()
-            excel.Application.Quit()
+            
             self.txtLogOutput.append(f".xls 파일을 .xlsx로 변환: {os.path.basename(xls_path)} -> {os.path.basename(xlsx_path)}")
             self.temp_files.append(xlsx_path)
             return xlsx_path
         except Exception as e:
             self.txtLogOutput.append(f".xls to .xlsx 변환 오류: {e}")
             return None
+        finally:
+            if excel:
+                excel.DisplayAlerts = False
+                excel.Application.Quit()
 
     def load_or_create_key(self):
         key_file = 'secret.key'
@@ -344,9 +359,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("출력 파일 암호화 설정이 업데이트되었습니다.")
 
     def open_options_dialog(self):
-        dialog = OptionsDialog(self, current_options=self.options)
+        # Create a temporary dictionary with only the options managed by OptionsDialog
+        options_for_dialog = {
+            'merge_type': self.options.get('merge_type', 'Sheet'),
+            'sheet_name_rule': self.options.get('sheet_name_rule', 'OriginalBoth'),
+            'sheet_trim_value': self.options.get('sheet_trim_value', 0),
+            'sheet_trim_rows': self.options.get('sheet_trim_rows', False),
+            'sheet_trim_cols': self.options.get('sheet_trim_cols', False)
+        }
+        dialog = OptionsDialog(self, current_options=options_for_dialog)
         if dialog.exec():
-            self.options = dialog.get_options()
+            # Update only the options managed by OptionsDialog
+            updated_options = dialog.get_options()
+            self.options['merge_type'] = updated_options.get('merge_type', 'Sheet')
+            self.options['sheet_name_rule'] = updated_options.get('sheet_name_rule', 'OriginalBoth')
+            self.options['sheet_trim_value'] = updated_options.get('sheet_trim_value', 0)
+            self.options['sheet_trim_rows'] = updated_options.get('sheet_trim_rows', False)
+            self.options['sheet_trim_cols'] = updated_options.get('sheet_trim_cols', False)
             self.txtLogOutput.append("옵션이 업데이트되었습니다.")
             self.save_settings()
 
@@ -794,8 +823,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("저장 경로를 지정하세요.")
             return
 
+        # Validate save path
+        save_dir = os.path.dirname(save_path)
+        if not os.path.isdir(save_dir):
+            self.txtLogOutput.append(f"경고: 저장 경로의 디렉토리가 존재하지 않습니다: {save_dir}")
+            return
+        if not os.access(save_dir, os.W_OK):
+            self.txtLogOutput.append(f"경고: 저장 경로에 쓸 수 있는 권한이 없습니다: {save_dir}")
+            return
+
         self.progressBar.setValue(0)
         self.txtLogOutput.clear()
+        self.txtLogOutput.append(f"DEBUG: file_passwords at start of merge: {self.file_passwords}")
 
         try:
             merge_type = self.options.get('merge_type', 'Sheet')
@@ -826,9 +865,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 else:
                     self.merge_as_sheets(sheets_to_merge, save_path)
             elif merge_type == 'Horizontal':
-                self.merge_horizontally(sheets_to_merge, save_path)
+                if use_win32_merge:
+                    self.merge_horizontally_win32(sheets_to_merge, save_path)
+                else:
+                    self.merge_horizontally(sheets_to_merge, save_path)
             elif merge_type == 'Vertical':
-                self.merge_vertically(sheets_to_merge, save_path)
+                if use_win32_merge:
+                    self.merge_vertically_win32(sheets_to_merge, save_path)
+                else:
+                    self.merge_vertically(sheets_to_merge, save_path)
             
             # Encrypt output file if needed
             if self.encrypt_output and self.output_encryption_password:
@@ -849,6 +894,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append(f"병합 오류: {e}")
         finally:
             self.progressBar.setValue(100)
+            # Open the save path directory and focus on the file
+            try:
+                if sys.platform == 'win32':
+                    subprocess.run(['explorer', '/select,', os.path.abspath(save_path)])
+                elif sys.platform == 'darwin': # macOS
+                    subprocess.run(['open', '-R', os.path.abspath(save_path)])
+                else: # Linux
+                    subprocess.run(['xdg-open', os.path.dirname(os.path.abspath(save_path))])
+            except Exception as e:
+                self.txtLogOutput.append(f"저장 경로를 열 수 없습니다: {e}")
 
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
@@ -871,7 +926,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
                     continue
                 
-                original_path = os.path.abspath(info['original_path'])
+                processed_path = os.path.abspath(info['processed_path'])
                 
                 # Retrieve password for the file
                 password = self.file_passwords.get(file_name)
@@ -879,9 +934,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 try:
                     if password:
                         self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
-                        source_workbook = excel.Workbooks.Open(original_path, Password=password)
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
                     else:
-                        source_workbook = excel.Workbooks.Open(original_path)
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
                     
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
@@ -890,17 +945,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     
                     # Get the newly copied sheet
                     newly_copied_sheet = merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
-
-                    if self.options['only_value_copy']:
-                        self.txtLogOutput.append(f"DEBUG: {item} 시트 값만 복사 (Win32, 서식 유지)...")
-                        # Copy values only, preserving formatting
-                        # This involves copying the used range of the source sheet
-                        # and pasting values to the newly copied sheet.
-                        source_range = source_sheet.UsedRange
-                        source_range.Copy()
-                        newly_copied_sheet.Paste(Destination=newly_copied_sheet.Range(source_range.Address), Paste=win32.constants.xlPasteValues)
-                        # Clear the clipboard
-                        excel.CutCopyMode = False
                     
                     source_workbook.Close(SaveChanges=False)
                 except Exception as e:
@@ -917,6 +961,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     # Ignore error if sheet is already gone or name is different
                     pass
 
+            # If only_value_copy is enabled, convert all formulas to values in the merged workbook
+            if self.options['only_value_copy']:
+                self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
+                for ws in merged_workbook.Worksheets:
+                    ws.UsedRange.Value = ws.UsedRange.Value
+
             # Suppress alerts to automatically overwrite existing files
             excel.DisplayAlerts = False # <--- Add this line
             merged_workbook.SaveAs(os.path.abspath(save_path))
@@ -927,6 +977,128 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append(f"win32 병합 오류: {e}")
         finally:
             if excel:
+                excel.DisplayAlerts = False
+                excel.Application.Quit()
+
+    def merge_horizontally_win32(self, sheets_to_merge, save_path):
+        excel = None
+        try:
+            excel = win32.gencache.EnsureDispatch('Excel.Application')
+            excel.Visible = False
+            output_workbook = excel.Workbooks.Add()
+            output_sheet = output_workbook.Worksheets(1)
+            output_sheet.Name = "Merged_Sheet"
+
+            total_sheets = len(sheets_to_merge)
+            last_row = 0
+            for i, item in enumerate(sheets_to_merge):
+                file_name, sheet_name = item.split('/', 1)
+                self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
+                QApplication.processEvents()
+
+                info = self.file_info.get(file_name)
+                if not info:
+                    self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
+                    continue
+                
+                processed_path = os.path.abspath(info['processed_path'])
+                
+                # Retrieve password for the file
+                password = self.file_passwords.get(file_name)
+
+                try:
+                    if password:
+                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
+                    else:
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
+                    
+                    source_workbook.Close(SaveChanges=False)
+                except Exception as e:
+                    self.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
+                
+                self.progressBar.setValue(int((i + 1) / total_sheets * 100))
+                QApplication.processEvents()
+
+            excel.DisplayAlerts = False
+            output_workbook.SaveAs(os.path.abspath(save_path))
+            excel.DisplayAlerts = True
+            output_workbook.Close(SaveChanges=False)
+
+        except Exception as e:
+            self.txtLogOutput.append(f"win32 병합 오류: {e}")
+        finally:
+            if excel:
+                excel.DisplayAlerts = False
+                excel.Application.Quit()
+
+    def merge_vertically_win32(self, sheets_to_merge, save_path):
+        excel = None
+        try:
+            excel = win32.gencache.EnsureDispatch('Excel.Application')
+            excel.Visible = False
+            output_workbook = excel.Workbooks.Add()
+            output_sheet = output_workbook.Worksheets(1)
+            output_sheet.Name = "Merged_Sheet"
+
+            total_sheets = len(sheets_to_merge)
+            last_col = 0
+            for i, item in enumerate(sheets_to_merge):
+                file_name, sheet_name = item.split('/', 1)
+                self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
+                QApplication.processEvents()
+
+                info = self.file_info.get(file_name)
+                if not info:
+                    self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
+                    continue
+                
+                processed_path = os.path.abspath(info['processed_path'])
+                
+                # Retrieve password for the file
+                password = self.file_passwords.get(file_name)
+
+                try:
+                    if password:
+                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
+                    else:
+                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
+                    
+                    source_sheet = source_workbook.Worksheets(sheet_name)
+                    
+                    source_range = source_sheet.UsedRange
+                    if source_range.Columns.Count > 0:
+                        # Copy the used range
+                        source_range.Copy()
+                        
+                        # Paste to the output sheet
+                        destination_range = output_sheet.Cells(1, last_col + 1)
+                        if self.options['only_value_copy']:
+                            destination_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
+                            excel.CutCopyMode = False
+                        else:
+                            output_sheet.Paste(Destination=destination_range)
+                        
+                        last_col += source_range.Columns.Count
+                    
+                    source_workbook.Close(SaveChanges=False)
+                except Exception as e:
+                    self.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
+                
+                self.progressBar.setValue(int((i + 1) / total_sheets * 100))
+                QApplication.processEvents()
+
+            excel.DisplayAlerts = False
+            output_workbook.SaveAs(os.path.abspath(save_path))
+            excel.DisplayAlerts = True
+            output_workbook.Close(SaveChanges=False)
+
+        except Exception as e:
+            self.txtLogOutput.append(f"win32 병합 오류: {e}")
+        finally:
+            if excel:
+                excel.DisplayAlerts = False
                 excel.Application.Quit()
 
     def merge_as_sheets(self, sheets_to_merge, save_path):
