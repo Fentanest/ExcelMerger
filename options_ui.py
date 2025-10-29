@@ -29,36 +29,66 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
-        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
-"    color: #ffffff;\n"
-"  font-family: \"Noto Sans\";\n"
-"  font-size: 9pt;")
+        Dialog.setStyleSheet(u"* {\n"
+"font-family: \"Noto Sans\";\n"
+"font-size: 9pt;\n"
+"}\n"
+"\n"
+"\n"
+"QDialog {\n"
+"    background-color: #f0f0f0;\n"
+"}\n"
+"\n"
+"QGroupBox {\n"
+"background-color: rgb(244, 246, 251)\n"
+"}\n"
+"\n"
+"QListView {\n"
+"background-color: #ffffff;\n"
+"}\n"
+"\n"
+"/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
+"QRadioButton::indicator:unchecked {\n"
+"background-color: gray;\n"
+"border: 2px solid white;\n"
+"}\n"
+"/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
+"QRadioButton::indicator:checked {\n"
+"background-color: black;\n"
+"border: 2px solid white;\n"
+"}")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(70, 260, 170, 32))
+        self.buttonBox.setFont(font)
         self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
         self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
         self.groupBox = QGroupBox(Dialog)
         self.groupBox.setObjectName(u"groupBox")
-        self.groupBox.setGeometry(QRect(10, 100, 181, 70))
+        self.groupBox.setGeometry(QRect(10, 100, 200, 70))
+        self.groupBox.setFont(font)
         self.layoutWidget = QWidget(self.groupBox)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(11, 29, 160, 29))
+        self.layoutWidget.setGeometry(QRect(11, 29, 173, 29))
+        self.layoutWidget.setFont(font)
         self.horizontalLayout = QHBoxLayout(self.layoutWidget)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.radioButtonSheet = QRadioButton(self.layoutWidget)
         self.radioButtonSheet.setObjectName(u"radioButtonSheet")
+        self.radioButtonSheet.setFont(font)
 
         self.horizontalLayout.addWidget(self.radioButtonSheet)
 
         self.radioButtonVertical = QRadioButton(self.layoutWidget)
         self.radioButtonVertical.setObjectName(u"radioButtonVertical")
+        self.radioButtonVertical.setFont(font)
 
         self.horizontalLayout.addWidget(self.radioButtonVertical)
 
         self.radioButtonHorizontal = QRadioButton(self.layoutWidget)
         self.radioButtonHorizontal.setObjectName(u"radioButtonHorizontal")
+        self.radioButtonHorizontal.setFont(font)
 
         self.horizontalLayout.addWidget(self.radioButtonHorizontal)
 
@@ -69,56 +99,85 @@ class Ui_Dialog(object):
         self.layoutWidget1 = QWidget(self.groupBox_3)
         self.layoutWidget1.setObjectName(u"layoutWidget1")
         self.layoutWidget1.setGeometry(QRect(11, 28, 300, 29))
+        self.layoutWidget1.setFont(font)
         self.horizontalLayout_2 = QHBoxLayout(self.layoutWidget1)
         self.horizontalLayout_2.setSpacing(8)
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.spinBoxEmpty = QSpinBox(self.layoutWidget1)
         self.spinBoxEmpty.setObjectName(u"spinBoxEmpty")
+        self.spinBoxEmpty.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.spinBoxEmpty)
 
         self.label_3 = QLabel(self.layoutWidget1)
         self.label_3.setObjectName(u"label_3")
+        self.label_3.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.label_3)
 
         self.checkBoxEmptyrow = QCheckBox(self.layoutWidget1)
         self.checkBoxEmptyrow.setObjectName(u"checkBoxEmptyrow")
+        self.checkBoxEmptyrow.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.checkBoxEmptyrow)
 
         self.label = QLabel(self.layoutWidget1)
         self.label.setObjectName(u"label")
+        self.label.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.label)
 
         self.checkBoxEmptyColumn = QCheckBox(self.layoutWidget1)
         self.checkBoxEmptyColumn.setObjectName(u"checkBoxEmptyColumn")
+        self.checkBoxEmptyColumn.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.checkBoxEmptyColumn)
 
         self.label_2 = QLabel(self.layoutWidget1)
         self.label_2.setObjectName(u"label_2")
+        self.label_2.setFont(font)
 
         self.horizontalLayout_2.addWidget(self.label_2)
 
         self.groupBox_4 = QGroupBox(Dialog)
         self.groupBox_4.setObjectName(u"groupBox_4")
-        self.groupBox_4.setGeometry(QRect(10, 10, 181, 90))
+        self.groupBox_4.setGeometry(QRect(10, 10, 200, 90))
+        self.groupBox_4.setFont(font)
         self.layoutWidget_3 = QWidget(self.groupBox_4)
         self.layoutWidget_3.setObjectName(u"layoutWidget_3")
-        self.layoutWidget_3.setGeometry(QRect(11, 29, 150, 60))
+        self.layoutWidget_3.setGeometry(QRect(10, 20, 173, 60))
+        self.layoutWidget_3.setFont(font)
         self.verticalLayout = QVBoxLayout(self.layoutWidget_3)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.radioButtonOriginalBoth = QRadioButton(self.layoutWidget_3)
         self.radioButtonOriginalBoth.setObjectName(u"radioButtonOriginalBoth")
+        self.radioButtonOriginalBoth.setFont(font)
+        self.radioButtonOriginalBoth.setStyleSheet(u"QRadioButton::indicator:checked {\n"
+"    background-color:       black;\n"
+"    border:                 2px solid white;\n"
+"}\n"
+"\n"
+"QRadioButton::indicator:unchecked {\n"
+"    background-color:       gray;\n"
+"    border:                 2px solid white;\n"
+"}")
 
         self.verticalLayout.addWidget(self.radioButtonOriginalBoth)
 
         self.radioButtonOriginalSheet = QRadioButton(self.layoutWidget_3)
         self.radioButtonOriginalSheet.setObjectName(u"radioButtonOriginalSheet")
+        self.radioButtonOriginalSheet.setFont(font)
+        self.radioButtonOriginalSheet.setStyleSheet(u"QRadioButton::indicator:checked {\n"
+"    background-color:       black;\n"
+"    border:                 2px solid white;\n"
+"}\n"
+"\n"
+"QRadioButton::indicator:unchecked {\n"
+"    background-color:       gray;\n"
+"    border:                 2px solid white;\n"
+"}")
 
         self.verticalLayout.addWidget(self.radioButtonOriginalSheet)
 

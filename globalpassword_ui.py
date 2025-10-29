@@ -27,24 +27,51 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
-        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
-"    color: #ffffff;\n"
-"  font-family: \"Noto Sans\";\n"
-"  font-size: 9pt;")
+        Dialog.setStyleSheet(u"* {\n"
+"font-family: \"Noto Sans\";\n"
+"font-size: 9pt;\n"
+"}\n"
+"\n"
+"\n"
+"QDialog {\n"
+"    background-color: #f0f0f0;\n"
+"}\n"
+"\n"
+"QGroupBox {\n"
+"background-color: rgb(244, 246, 251)\n"
+"}\n"
+"\n"
+"QListView {\n"
+"background-color: #ffffff;\n"
+"}\n"
+"\n"
+"/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
+"QRadioButton::indicator:unchecked {\n"
+"background-color: gray;\n"
+"border: 2px solid white;\n"
+"}\n"
+"/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
+"QRadioButton::indicator:checked {\n"
+"background-color: black;\n"
+"border: 2px solid white;\n"
+"}")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(20, 90, 170, 30))
         self.buttonBox.setMinimumSize(QSize(170, 30))
+        self.buttonBox.setFont(font)
         self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
         self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
         self.chkGlobalPassword = QCheckBox(Dialog)
         self.chkGlobalPassword.setObjectName(u"chkGlobalPassword")
         self.chkGlobalPassword.setGeometry(QRect(20, 20, 161, 23))
         self.chkGlobalPassword.setMinimumSize(QSize(91, 23))
+        self.chkGlobalPassword.setFont(font)
         self.lineEditGlobalPassword = QLineEdit(Dialog)
         self.lineEditGlobalPassword.setObjectName(u"lineEditGlobalPassword")
         self.lineEditGlobalPassword.setGeometry(QRect(20, 50, 170, 26))
         self.lineEditGlobalPassword.setMinimumSize(QSize(170, 26))
+        self.lineEditGlobalPassword.setFont(font)
         self.lineEditGlobalPassword.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
 
         self.retranslateUi(Dialog)

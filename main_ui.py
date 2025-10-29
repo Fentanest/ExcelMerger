@@ -16,7 +16,7 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QIcon, QImage, QKeySequence, QLinearGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QGridLayout, QGroupBox,
+from PySide6.QtWidgets import (QAbstractItemView, QApplication, QGroupBox, QHBoxLayout,
     QLabel, QLineEdit, QListView, QMainWindow,
     QMenu, QMenuBar, QProgressBar, QPushButton,
     QRadioButton, QSizePolicy, QStatusBar, QTextBrowser,
@@ -33,10 +33,30 @@ class Ui_MainWindow(object):
         font.setPointSize(9)
         font.setBold(False)
         MainWindow.setFont(font)
-        MainWindow.setStyleSheet(u"    background-color: #2b2b2b;\n"
-"    color: #ffffff;\n"
-"  font-family: \"Noto Sans\";\n"
-"  font-size: 9pt;")
+        MainWindow.setAutoFillBackground(True)
+        MainWindow.setStyleSheet(u"* {\n"
+"font-family: \"Noto Sans\";\n"
+"font-size: 9pt;\n"
+"}\n"
+"\n"
+"QMainWindow > QWidget {\n"
+"    background-color: #f0f0f0;\n"
+"}\n"
+"\n"
+"QListView {\n"
+"background-color: #ffffff;\n"
+"}\n"
+"\n"
+"/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
+"QRadioButton::indicator:unchecked {\n"
+"background-color: gray;\n"
+"border: 2px solid white;\n"
+"}\n"
+"/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
+"QRadioButton::indicator:checked {\n"
+"background-color: black;\n"
+"border: 2px solid white;\n"
+"}")
         self.actionAddExcelFile = QAction(MainWindow)
         self.actionAddExcelFile.setObjectName(u"actionAddExcelFile")
         icon = QIcon(QIcon.fromTheme(QIcon.ThemeIcon.DocumentNew))
@@ -47,7 +67,7 @@ class Ui_MainWindow(object):
         self.actionSetSavePath.setIcon(icon1)
         self.actionSetGlobalPassword = QAction(MainWindow)
         self.actionSetGlobalPassword.setObjectName(u"actionSetGlobalPassword")
-        icon2 = QIcon(QIcon.fromTheme(QIcon.ThemeIcon.DialogPassword))
+        icon2 = QIcon(QIcon.fromTheme(QIcon.ThemeIcon.SystemLockScreen))
         self.actionSetGlobalPassword.setIcon(icon2)
         self.actionSetOutputEncryption = QAction(MainWindow)
         self.actionSetOutputEncryption.setObjectName(u"actionSetOutputEncryption")
@@ -62,13 +82,16 @@ class Ui_MainWindow(object):
         self.progressBar = QProgressBar(self.centralwidget)
         self.progressBar.setObjectName(u"progressBar")
         self.progressBar.setGeometry(QRect(660, 560, 120, 23))
+        self.progressBar.setFont(font)
         self.progressBar.setValue(0)
         self.grpFile = QGroupBox(self.centralwidget)
         self.grpFile.setObjectName(u"grpFile")
         self.grpFile.setGeometry(QRect(10, 10, 210, 380))
+        self.grpFile.setFont(font)
         self.listFileAdded = QListView(self.grpFile)
         self.listFileAdded.setObjectName(u"listFileAdded")
         self.listFileAdded.setGeometry(QRect(10, 30, 190, 340))
+        self.listFileAdded.setFont(font)
         self.listFileAdded.setAcceptDrops(True)
         self.listFileAdded.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.listFileAdded.setDragEnabled(True)
@@ -77,9 +100,11 @@ class Ui_MainWindow(object):
         self.grpSheet = QGroupBox(self.centralwidget)
         self.grpSheet.setObjectName(u"grpSheet")
         self.grpSheet.setGeometry(QRect(230, 10, 210, 380))
+        self.grpSheet.setFont(font)
         self.listSheetInFile = QListView(self.grpSheet)
         self.listSheetInFile.setObjectName(u"listSheetInFile")
         self.listSheetInFile.setGeometry(QRect(10, 30, 190, 340))
+        self.listSheetInFile.setFont(font)
         self.listSheetInFile.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.listSheetInFile.setDragEnabled(True)
         self.listSheetInFile.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
@@ -87,9 +112,11 @@ class Ui_MainWindow(object):
         self.grpSheetToMerge = QGroupBox(self.centralwidget)
         self.grpSheetToMerge.setObjectName(u"grpSheetToMerge")
         self.grpSheetToMerge.setGeometry(QRect(475, 10, 311, 380))
+        self.grpSheetToMerge.setFont(font)
         self.listSheetToMerge = QListView(self.grpSheetToMerge)
         self.listSheetToMerge.setObjectName(u"listSheetToMerge")
         self.listSheetToMerge.setGeometry(QRect(10, 30, 291, 340))
+        self.listSheetToMerge.setFont(font)
         self.listSheetToMerge.setAcceptDrops(True)
         self.listSheetToMerge.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.listSheetToMerge.setDragEnabled(True)
@@ -98,47 +125,55 @@ class Ui_MainWindow(object):
         self.btnSheetToMergeAdd = QPushButton(self.centralwidget)
         self.btnSheetToMergeAdd.setObjectName(u"btnSheetToMergeAdd")
         self.btnSheetToMergeAdd.setGeometry(QRect(440, 150, 35, 35))
+        self.btnSheetToMergeAdd.setFont(font)
         self.btnSheetToMergeRemove = QPushButton(self.centralwidget)
         self.btnSheetToMergeRemove.setObjectName(u"btnSheetToMergeRemove")
         self.btnSheetToMergeRemove.setGeometry(QRect(440, 200, 35, 35))
+        self.btnSheetToMergeRemove.setFont(font)
         self.grpSavePath = QGroupBox(self.centralwidget)
         self.grpSavePath.setObjectName(u"grpSavePath")
         self.grpSavePath.setGeometry(QRect(10, 470, 771, 80))
+        self.grpSavePath.setFont(font)
         self.btnBrowsePath = QPushButton(self.grpSavePath)
         self.btnBrowsePath.setObjectName(u"btnBrowsePath")
         self.btnBrowsePath.setGeometry(QRect(660, 40, 94, 26))
+        self.btnBrowsePath.setFont(font)
         self.lineEditSavePath = QLineEdit(self.grpSavePath)
         self.lineEditSavePath.setObjectName(u"lineEditSavePath")
         self.lineEditSavePath.setGeometry(QRect(20, 40, 631, 26))
+        self.lineEditSavePath.setFont(font)
         self.txtLogOutput = QTextBrowser(self.centralwidget)
         self.txtLogOutput.setObjectName(u"txtLogOutput")
         self.txtLogOutput.setGeometry(QRect(10, 600, 771, 192))
+        self.txtLogOutput.setFont(font)
         self.lblCurrentFile = QLabel(self.centralwidget)
         self.lblCurrentFile.setObjectName(u"lblCurrentFile")
         self.lblCurrentFile.setGeometry(QRect(10, 560, 641, 18))
+        self.lblCurrentFile.setFont(font)
         self.groupBox_2 = QGroupBox(self.centralwidget)
         self.groupBox_2.setObjectName(u"groupBox_2")
-        self.groupBox_2.setGeometry(QRect(230, 390, 210, 70))
+        self.groupBox_2.setGeometry(QRect(230, 390, 380, 70))
+        self.groupBox_2.setFont(font)
         self.layoutWidget = QWidget(self.groupBox_2)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(15, 26, 180, 35))
-        self.gridLayout = QGridLayout(self.layoutWidget)
-        self.gridLayout.setObjectName(u"gridLayout")
-        self.gridLayout.setContentsMargins(0, 0, 0, 0)
+        self.layoutWidget.setGeometry(QRect(15, 26, 344, 29))
+        self.layoutWidget.setFont(font)
+        self.horizontalLayout = QHBoxLayout(self.layoutWidget)
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.radioButtonAll = QRadioButton(self.layoutWidget)
         self.radioButtonAll.setObjectName(u"radioButtonAll")
+        self.radioButtonAll.setFont(font)
+        self.radioButtonAll.setStyleSheet(u"")
 
-        self.gridLayout.addWidget(self.radioButtonAll, 0, 0, 1, 1)
-
-        self.radioButtonChoice = QRadioButton(self.layoutWidget)
-        self.radioButtonChoice.setObjectName(u"radioButtonChoice")
-
-        self.gridLayout.addWidget(self.radioButtonChoice, 0, 1, 1, 1)
+        self.horizontalLayout.addWidget(self.radioButtonAll)
 
         self.radioButtonSpecific = QRadioButton(self.layoutWidget)
         self.radioButtonSpecific.setObjectName(u"radioButtonSpecific")
+        self.radioButtonSpecific.setFont(font)
+        self.radioButtonSpecific.setStyleSheet(u"")
 
-        self.gridLayout.addWidget(self.radioButtonSpecific, 1, 0, 1, 1)
+        self.horizontalLayout.addWidget(self.radioButtonSpecific)
 
         self.lineEditSheetSpecific = QLineEdit(self.layoutWidget)
         self.lineEditSheetSpecific.setObjectName(u"lineEditSheetSpecific")
@@ -148,7 +183,14 @@ class Ui_MainWindow(object):
         font1.setWeight(QFont.Thin)
         self.lineEditSheetSpecific.setFont(font1)
 
-        self.gridLayout.addWidget(self.lineEditSheetSpecific, 1, 1, 1, 1)
+        self.horizontalLayout.addWidget(self.lineEditSheetSpecific)
+
+        self.radioButtonChoice = QRadioButton(self.layoutWidget)
+        self.radioButtonChoice.setObjectName(u"radioButtonChoice")
+        self.radioButtonChoice.setFont(font)
+        self.radioButtonChoice.setStyleSheet(u"")
+
+        self.horizontalLayout.addWidget(self.radioButtonChoice)
 
         self.btnStart = QPushButton(self.centralwidget)
         self.btnStart.setObjectName(u"btnStart")
@@ -226,10 +268,10 @@ class Ui_MainWindow(object):
         self.lblCurrentFile.setText("")
         self.groupBox_2.setTitle(QCoreApplication.translate("MainWindow", u"\uc77c\uad04\ucc98\ub9ac", None))
         self.radioButtonAll.setText(QCoreApplication.translate("MainWindow", u"\ubaa8\ub4e0 \uc2dc\ud2b8", None))
-        self.radioButtonChoice.setText(QCoreApplication.translate("MainWindow", u"\uc9c1\uc811 \uc120\ud0dd", None))
         self.radioButtonSpecific.setText(QCoreApplication.translate("MainWindow", u"\ud2b9\uc815 \uc2dc\ud2b8", None))
         self.lineEditSheetSpecific.setText("")
         self.lineEditSheetSpecific.setPlaceholderText(QCoreApplication.translate("MainWindow", u"\ucf64\ub9c8(,)\ub85c \uad6c\ubd84", None))
+        self.radioButtonChoice.setText(QCoreApplication.translate("MainWindow", u"\uc9c1\uc811 \uc120\ud0dd", None))
         self.btnStart.setText(QCoreApplication.translate("MainWindow", u"\uc791\uc5c5 \uc2dc\uc791(F5)", None))
 #if QT_CONFIG(shortcut)
         self.btnStart.setShortcut(QCoreApplication.translate("MainWindow", u"F5", None))

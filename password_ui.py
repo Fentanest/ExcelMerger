@@ -28,8 +28,34 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
-        Dialog.setStyleSheet(u"    background-color: #2b2b2b;\n"
-"    color: #ffffff;")
+        Dialog.setStyleSheet(u"* {\n"
+"font-family: \"Noto Sans\";\n"
+"font-size: 9pt;\n"
+"}\n"
+"\n"
+"\n"
+"QDialog {\n"
+"    background-color: #f0f0f0;\n"
+"}\n"
+"\n"
+"QGroupBox {\n"
+"background-color: rgb(244, 246, 251)\n"
+"}\n"
+"\n"
+"QListView {\n"
+"background-color: #ffffff;\n"
+"}\n"
+"\n"
+"/* RadioButton \uae30\ubcf8 indicator \uc2a4\ud0c0\uc77c */\n"
+"QRadioButton::indicator:unchecked {\n"
+"background-color: gray;\n"
+"border: 2px solid white;\n"
+"}\n"
+"/* \uc120\ud0dd \uc2dc \uc0c9\uae54 */\n"
+"QRadioButton::indicator:checked {\n"
+"background-color: black;\n"
+"border: 2px solid white;\n"
+"}")
         self.buttonBox = QDialogButtonBox(Dialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setGeometry(QRect(20, 150, 170, 30))
@@ -40,10 +66,7 @@ class Ui_Dialog(object):
         self.chkKeepPassword.setObjectName(u"chkKeepPassword")
         self.chkKeepPassword.setGeometry(QRect(20, 80, 161, 23))
         self.chkKeepPassword.setMinimumSize(QSize(91, 23))
-        font1 = QFont()
-        font1.setFamilies([u"Ubuntu Sans"])
-        font1.setPointSize(9)
-        self.chkKeepPassword.setFont(font1)
+        self.chkKeepPassword.setFont(font)
         self.lineEditKeepPassword = QLineEdit(Dialog)
         self.lineEditKeepPassword.setObjectName(u"lineEditKeepPassword")
         self.lineEditKeepPassword.setGeometry(QRect(20, 110, 170, 26))
