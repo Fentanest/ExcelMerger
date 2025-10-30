@@ -2,10 +2,9 @@ import sys
 import os
 if 'GTK_MODULES' in os.environ:
     del os.environ['GTK_MODULES']
-import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListView, QAbstractItemView, QDialog
 from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, QEvent, QPoint, QUrl)
-from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence, QAction, QDesktopServices
+from PySide6.QtGui import QDrag, QKeySequence, QAction, QDesktopServices
 
 from main_ui import Ui_MainWindow
 from dialogs import PasswordDialog, GlobalPasswordDialog, EncryptionDialog, OptionsDialog
@@ -14,14 +13,8 @@ from file_handler import FileHandler
 from merger import Merger
 from merger_win32 import MergerWin32
 
-import openpyxl
-import xlrd
 import msoffcrypto
-import configparser
-from cryptography.fernet import Fernet
 import io
-import sys
-import tempfile
 import subprocess
 
 if sys.platform == 'win32':
@@ -108,9 +101,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionOptions.triggered.connect(self.open_options_dialog)
         self.actionVisitBlog.triggered.connect(self.open_blog)
 
-        self.actionActivateDebugMode.setObjectName(u"actionActivateDebugMode")
-        self.actionOptions.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+O", None))
-#endif // QT_CONFIG(shortcut)
+
 
         # Set initial state
         self.radioButtonChoice.setChecked(True)
