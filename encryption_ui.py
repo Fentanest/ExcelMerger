@@ -27,6 +27,9 @@ class Ui_Dialog(object):
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
+        icon = QIcon()
+        icon.addFile(u"../logo.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        Dialog.setWindowIcon(icon)
         Dialog.setStyleSheet(u"* {\n"
 "font-family: \"Noto Sans\";\n"
 "font-size: 9pt;\n"

@@ -5,7 +5,7 @@ from cx_Freeze import setup, Executable
 build_exe_options = {
     "packages": ["os", "sys", "re", "openpyxl", "xlrd", "msoffcrypto", "cffi", "cryptography"],
     "includes": ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"],
-    "include_files": ["config.ini", "secret.key", "ui/"],
+    "include_files": [],
     "excludes": []
 }
 
