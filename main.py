@@ -6,10 +6,11 @@ from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, Q
 from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence, QAction
 
 from main_ui import Ui_MainWindow
-from password_ui import Ui_Dialog as Ui_PasswordDialog
-from globalpassword_ui import Ui_Dialog as Ui_GlobalPasswordDialog
-from encryption_ui import Ui_Dialog as Ui_EncryptionDialog
-from options_ui import Ui_Dialog as Ui_OptionsDialog
+from dialogs import PasswordDialog, GlobalPasswordDialog, EncryptionDialog, OptionsDialog
+from settings import SettingsManager
+from file_handler import FileHandler
+from merger import Merger
+from merger_win32 import MergerWin32
 
 import openpyxl
 import xlrd
@@ -30,107 +31,26 @@ if sys.platform == 'win32':
 else:
     win32 = None
 
-
-class PasswordDialog(QDialog, Ui_PasswordDialog):
-    def __init__(self, file_name, parent=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        self.textEditOpenFile.setText(file_name)
-        self.lineEditKeepPassword.setFocus() # Set focus to the password input field
-        self.btnStop.clicked.connect(self.on_stop_clicked)
-        self.stopped = False
-
-    def on_stop_clicked(self):
-        self.stopped = True
-        self.reject()
-
-class GlobalPasswordDialog(QDialog, Ui_GlobalPasswordDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setupUi(self)
-
-class EncryptionDialog(QDialog, Ui_EncryptionDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setupUi(self)
-
-class OptionsDialog(QDialog, Ui_OptionsDialog):
-    def __init__(self, parent=None, current_options=None):
-        super().__init__(parent)
-        self.setupUi(self)
-        if current_options:
-            self.set_options(current_options)
-
-    def set_options(self, options):
-        # Set merge type
-        if options.get('merge_type') == 'Sheet':
-            self.radioButtonSheet.setChecked(True)
-        elif options.get('merge_type') == 'Horizontal':
-            self.radioButtonHorizontal.setChecked(True)
-        elif options.get('merge_type') == 'Vertical':
-            self.radioButtonVertical.setChecked(True)
-
-        # Set sheet name rule
-        if options.get('sheet_name_rule') == 'OriginalBoth':
-            self.radioButtonOriginalBoth.setChecked(True)
-        elif options.get('sheet_name_rule') == 'OriginalSheet':
-            self.radioButtonOriginalSheet.setChecked(True)
-
-        # Set SheetTrim options
-        self.spinBoxEmpty.setValue(options.get('sheet_trim_value', 0))
-        self.checkBoxEmptyRow.setChecked(options.get('sheet_trim_rows', False))
-        self.checkBoxEmptyColumn.setChecked(options.get('sheet_trim_cols', False))
-
-    def get_options(self):
-        options = {}
-        if self.radioButtonSheet.isChecked():
-            options['merge_type'] = 'Sheet'
-        elif self.radioButtonHorizontal.isChecked():
-            options['merge_type'] = 'Horizontal'
-        elif self.radioButtonVertical.isChecked():
-            options['merge_type'] = 'Vertical'
-
-        if self.radioButtonOriginalBoth.isChecked():
-            options['sheet_name_rule'] = 'OriginalBoth'
-        elif self.radioButtonOriginalSheet.isChecked():
-            options['sheet_name_rule'] = 'OriginalSheet'
-
-        options['sheet_trim_value'] = self.spinBoxEmpty.value()
-        options['sheet_trim_rows'] = self.checkBoxEmptyRow.isChecked()
-        options['sheet_trim_cols'] = self.checkBoxEmptyColumn.isChecked()
-        return options
-
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
         self.setWindowTitle("Excel Merger")
 
-        # Options state
-        self.options = {
-            'merge_type': 'Sheet',
-            'sheet_name_rule': 'OriginalBoth',
-            'sheet_trim_value': 0,
-            'sheet_trim_rows': False,
-            'sheet_trim_cols': False,
-            'only_value_copy': False # New option for copying only values
-        }
-
-        # Settings and Encryption
-        self.settings_file = 'config.ini'
-        self.key = self.load_or_create_key()
-        self.cipher = Fernet(self.key)
-        self.global_password = ""
-        self.output_encryption_password = ""
-        self.use_global_password = False
-        self.encrypt_output = False
-        self.stop_asking_for_passwords = False
-        self.debug_mode = False
+        # Settings Manager
+        self.settings_manager = SettingsManager()
+        self.file_handler = FileHandler(self)
+        self.merger = Merger(self)
+        self.merger_win32 = MergerWin32(self, win32)
+        
+        # Load settings and initialize state
+        self.load_and_apply_settings()
 
         # File paths management
         self.file_info = {}
         self.file_passwords = {}
         self.temp_files = []
+        self.stop_asking_for_passwords = False
 
         # Initialize models for list views
         self.file_list_model = QStringListModel()
@@ -154,9 +74,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listSheetInFile.setDragEnabled(True)
         self.listSheetInFile.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
-
-
-
         self.listFileAdded.setDragDropOverwriteMode(False)
 
         # Connect signals to slots
@@ -179,7 +96,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.radioButtonChoice.toggled.connect(self.update_sheet_selection_mode)
         self.lineEditSheetSpecific.textChanged.connect(self.populate_specific_sheets)
 
-
         # Password and Encryption actions
         self.menu_2.addAction(self.actionSetGlobalPassword)
         self.menu_2.addAction(self.actionSetOutputEncryption)
@@ -189,12 +105,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionSetOutputEncryption.triggered.connect(self.open_encryption_dialog)
         self.actionOptions.triggered.connect(self.open_options_dialog)
 
-
         self.actionActivateDebugMode.setObjectName(u"actionActivateDebugMode")
         self.actionOptions.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+O", None))
 #endif // QT_CONFIG(shortcut)
-
-
 
         # Set initial state
         self.radioButtonChoice.setChecked(True)
@@ -212,14 +125,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setAcceptDrops(False)
         self.drag_start_position = None
 
-
         self.actionActivateDebugMode.toggled.connect(self.on_debug_mode_toggled)
 
         # Connect start button
         self.btnStart.clicked.connect(self.start_merge)
-
-        # Load settings and log initial state
-        self.load_settings()
 
         # Connect checkBoxOnlyValue and set initial state
         self.checkBoxOnlyValue.setChecked(self.options['only_value_copy'])
@@ -227,7 +136,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def closeEvent(self, event):
         # Clean up temporary files
-        self.save_settings()
+        self.gather_and_save_settings()
         for temp_file in self.temp_files:
             try:
                 os.remove(temp_file)
@@ -241,9 +150,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.debug_mode:
             log_msg = f"--- D&D Debug ---\n"
             log_msg += f"Event: {event.type()} on {list_view.objectName()}\n"
-            log_msg += f"Pos: {event.pos()}\n"
+            log_msg += f"Pos: {event.position()}\n"
             indicator_pos = list_view.dropIndicatorPosition()
-            index_at_pos = list_view.indexAt(event.pos())
+            index_at_pos = list_view.indexAt(event.position().toPoint())
             log_msg += f"Indicator: {indicator_pos}\n"
             log_msg += f"Index @ Pos: {index_at_pos.row()}\n"
             selected_rows = [index.row() for index in list_view.selectedIndexes()]
@@ -254,7 +163,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if self.debug_mode:
                 self.txtLogOutput.append("-> Drop detected. Applying manual move.")
             
-            dest_index = list_view.indexAt(event.pos())
+            dest_index = list_view.indexAt(event.position().toPoint())
             dest_row = dest_index.row()
 
             if list_view.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.BelowItem:
@@ -299,116 +208,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         event.setDropAction(Qt.DropAction.MoveAction)
         return False
 
-    def convert_xls_to_xlsx_win32(self, xls_path):
-        if not win32:
-            self.txtLogOutput.append("pywin32가 설치되지 않아 .xls 변환을 건너뜁니다.")
-            return None
-        excel = None # Initialize excel to None
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            excel.Visible = False # Keep it hidden
-            
-            file_name = os.path.basename(xls_path)
-            password = self.file_passwords.get(file_name)
-
-            if password:
-                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0, Password=password)
-            else:
-                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0)
-            
-            # Create a temporary file path for the xlsx file
-            fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='excelmerger_')
-            os.close(fd)
-
-            excel.DisplayAlerts = False
-            wb.SaveAs(xlsx_path, FileFormat=51) # 51 is for xlsx format
-            excel.DisplayAlerts = True
-            wb.Close()
-            
-            self.txtLogOutput.append(f".xls 파일을 .xlsx로 변환: {os.path.basename(xls_path)} -> {os.path.basename(xlsx_path)}")
-            self.temp_files.append(xlsx_path)
-            return xlsx_path
-        except Exception as e:
-            self.txtLogOutput.append(f".xls to .xlsx 변환 오류: {e}")
-            return None
-        finally:
-            if excel:
-                excel.DisplayAlerts = False
-                excel.Application.Quit()
-
-    def load_or_create_key(self):
-        key_file = 'secret.key'
-        if os.path.exists(key_file):
-            with open(key_file, 'rb') as f:
-                return f.read()
-        else:
-            key = Fernet.generate_key()
-            with open(key_file, 'wb') as f:
-                f.write(key)
-            return key
-
-    def load_settings(self):
-        config = configparser.ConfigParser()
-        if os.path.exists(self.settings_file):
-            config.read(self.settings_file)
-            if 'Passwords' in config:
-                if 'global_password' in config['Passwords'] and config['Passwords']['global_password']:
-                    try:
-                        decrypted_pass = self.cipher.decrypt(config['Passwords']['global_password'].encode()).decode()
-                        self.global_password = decrypted_pass
-                    except:
-                        self.global_password = ""
-                self.use_global_password = config['Passwords'].getboolean('use_global_password', False)
-
-                if 'output_encryption_password' in config['Passwords'] and config['Passwords']['output_encryption_password']:
-                    try:
-                        decrypted_pass = self.cipher.decrypt(config['Passwords']['output_encryption_password'].encode()).decode()
-                        self.output_encryption_password = decrypted_pass
-                    except:
-                        self.output_encryption_password = ""
-                self.encrypt_output = config['Passwords'].getboolean('encrypt_output', False)
-
-        if 'Options' in config:
-            self.options['merge_type'] = config['Options'].get('merge_type', 'Sheet')
-            self.options['sheet_name_rule'] = config['Options'].get('sheet_name_rule', 'OriginalBoth')
-            self.options['sheet_trim_value'] = config['Options'].getint('sheet_trim_value', 0)
-            self.options['sheet_trim_rows'] = config['Options'].getboolean('sheet_trim_rows', False)
-            self.options['sheet_trim_cols'] = config['Options'].getboolean('sheet_trim_cols', False)
-            self.options['only_value_copy'] = config['Options'].getboolean('only_value_copy', False) # Load new option
-            self.debug_mode = config['Options'].getboolean('debug_mode', False)
-            self.actionActivateDebugMode.setChecked(self.debug_mode)
-
-        if 'Paths' in config and 'last_save_path' in config['Paths']:
-            self.lineEditSavePath.setText(config['Paths']['last_save_path'])
-
+    def load_and_apply_settings(self):
+        settings = self.settings_manager.load_settings()
+        self.global_password = settings['global_password']
+        self.use_global_password = settings['use_global_password']
+        self.output_encryption_password = settings['output_encryption_password']
+        self.encrypt_output = settings['encrypt_output']
+        self.options = settings['options']
+        self.debug_mode = settings['debug_mode']
+        self.actionActivateDebugMode.setChecked(self.debug_mode)
+        self.lineEditSavePath.setText(settings['last_save_path'])
         self.txtLogOutput.append(f"출력파일 암호화: {'활성' if self.encrypt_output else '비활성'}")
         self.txtLogOutput.append(f"전역 비밀번호: {'설정됨' if self.use_global_password and self.global_password else '설정 안됨'}")
 
-    def save_settings(self):
-        config = configparser.ConfigParser()
-        config.read(self.settings_file)
-
-        if not config.has_section('Passwords'):
-            config.add_section('Passwords')
-        encrypted_global_pass = self.cipher.encrypt(self.global_password.encode()).decode() if self.global_password else ""
-        config.set('Passwords', 'global_password', encrypted_global_pass)
-        config.set('Passwords', 'use_global_password', str(self.use_global_password))
-        encrypted_output_pass = self.cipher.encrypt(self.output_encryption_password.encode()).decode() if self.output_encryption_password else ""
-        config.set('Passwords', 'output_encryption_password', encrypted_output_pass)
-        config.set('Passwords', 'encrypt_output', str(self.encrypt_output))
-
-        if not config.has_section('Options'):
-            config.add_section('Options')
-        for key, value in self.options.items():
-            config.set('Options', key, str(value))
-        config.set('Options', 'debug_mode', str(self.debug_mode))
-
-        if not config.has_section('Paths'):
-            config.add_section('Paths')
-        config.set('Paths', 'last_save_path', self.lineEditSavePath.text())
-
-        with open(self.settings_file, 'w') as configfile:
-            config.write(configfile)
+    def gather_and_save_settings(self):
+        settings = {
+            'global_password': self.global_password,
+            'use_global_password': self.use_global_password,
+            'output_encryption_password': self.output_encryption_password,
+            'encrypt_output': self.encrypt_output,
+            'options': self.options,
+            'debug_mode': self.debug_mode,
+            'last_save_path': self.lineEditSavePath.text()
+        }
+        self.settings_manager.save_settings(settings)
 
     def open_global_password_dialog(self):
         dialog = GlobalPasswordDialog(self)
@@ -421,7 +244,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if dialog.exec():
             self.use_global_password = dialog.chkGlobalPassword.isChecked()
             self.global_password = dialog.lineEditGlobalPassword.text() if self.use_global_password else ""
-            self.save_settings()
+            self.gather_and_save_settings()
             self.txtLogOutput.append("전역 비밀번호 설정이 업데이트되었습니다.")
 
     def open_encryption_dialog(self):
@@ -435,7 +258,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if dialog.exec():
             self.encrypt_output = dialog.chkEnablePassword.isChecked()
             self.output_encryption_password = dialog.lineEditPassword.text() if self.encrypt_output else ""
-            self.save_settings()
+            self.gather_and_save_settings()
             self.txtLogOutput.append("출력 파일 암호화 설정이 업데이트되었습니다.")
 
     def open_options_dialog(self):
@@ -457,63 +280,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.options['sheet_trim_rows'] = updated_options.get('sheet_trim_rows', False)
             self.options['sheet_trim_cols'] = updated_options.get('sheet_trim_cols', False)
             self.txtLogOutput.append("옵션이 업데이트되었습니다.")
-            self.save_settings()
+            self.gather_and_save_settings()
 
     def on_only_value_copy_toggled(self, checked):
         self.options['only_value_copy'] = checked
-        self.save_settings()
+        self.gather_and_save_settings()
 
     def on_debug_mode_toggled(self, checked):
         self.debug_mode = checked
         self.txtLogOutput.append(f"디버그 모드: {'활성' if checked else '비활성'}")
-        self.save_settings()
-
-    def _open_workbook(self, file_path, file_name, data_only=False): # Add data_only flag
-        try:
-            if file_path.endswith('.xlsx'):
-                return openpyxl.load_workbook(file_path, read_only=False, data_only=data_only) # Use data_only flag
-            elif file_path.endswith('.xls'):
-                # xlrd does not have a direct equivalent of data_only=True when opening.
-                # It always reads the calculated values.
-                return xlrd.open_workbook(file_path, formatting_info=True)
-        except Exception as e:
-            self.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
-            return None
-        return None
-
-    def get_sheet_names(self, file_path):
-        file_name = os.path.basename(file_path)
-        workbook = self._open_workbook(file_path, file_name)
-        
-        original_file_path = file_path # Keep track of the original path
-        processed_file_path = original_file_path # Initialize processed_file_path
-
-        if workbook is None:
-            # If _open_workbook failed, try to handle it as an encrypted file
-            decrypted_temp_path = self.handle_encrypted_file(original_file_path)
-            if decrypted_temp_path:
-                # If successfully decrypted, try to open the workbook again with the temp file
-                workbook = self._open_workbook(decrypted_temp_path, file_name)
-                processed_file_path = decrypted_temp_path # Update processed_file_path
-                if workbook is None:
-                    self.txtLogOutput.append(f"암호 해독된 파일 열기 실패: {file_name}")
-                    return None, None # Return None for both
-            else:
-                # If handle_encrypted_file also failed or user cancelled
-                self.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
-                return None, None # Return None for both
-
-        # If we have a workbook (either original or decrypted temp), get sheet names
-        if workbook:
-            try:
-                if processed_file_path.endswith('.xlsx'): # Use processed_file_path here
-                    return workbook.sheetnames, processed_file_path
-                elif processed_file_path.endswith('.xls'): # Use processed_file_path here
-                    return workbook.sheet_names(), processed_file_path
-            except Exception as e:
-                self.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
-                return None, None # Return None for both
-        return None, None # Should not be reached if workbook is valid
+        self.gather_and_save_settings()
 
     def eventFilter(self, source, event):
         # File drop on listFileAdded
@@ -538,9 +314,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Drag start from listSheetInFile
         if source == self.listSheetInFile.viewport():
             if event.type() == QEvent.Type.MouseButtonPress:
-                self.drag_start_position = event.pos()
+                self.drag_start_position = event.position()
             elif event.type() == QEvent.Type.MouseMove and self.drag_start_position:
-                if (event.pos() - self.drag_start_position).manhattanLength() > QApplication.startDragDistance():
+                if (event.position() - self.drag_start_position).manhattanLength() > QApplication.startDragDistance():
                     self.perform_drag_sheet_in_file()
         
         # Drag/Drop on listSheetToMerge's viewport
@@ -575,13 +351,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         return super().eventFilter(source, event)
 
-
-
     def dragMoveEvent(self, event):
         if event.mimeData().hasFormat("application/x-sheet-data"):
             event.acceptProposedAction()
-
-
 
     def perform_drag_sheet_in_file(self):
         indexes = self.listSheetInFile.selectedIndexes()
@@ -627,7 +399,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
 
             if file.endswith('.xlsx') or file.endswith('.xls'):
-                sheet_names, processed_file_path = self.get_sheet_names(file)
+                sheet_names, processed_file_path = self.file_handler.get_sheet_names(file)
 
                 if sheet_names is not None and processed_file_path is not None:
                     self.file_info[basename] = {
@@ -639,7 +411,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.txtLogOutput.append(f"파일을 열 수 없어 목록에서 제외합니다: {basename}")
 
         self.file_list_model.setStringList(list(self.file_info.keys()))
-
 
     def add_excel_file(self):
         self.txtLogOutput.append("add_excel_file triggered")
@@ -664,7 +435,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sheet_list_model.setStringList([])
         self.merge_list_model.setStringList([])
 
-
     def on_file_selected(self, index):
         basename = self.file_list_model.data(index, 0)
         info = self.file_info.get(basename)
@@ -676,7 +446,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         info = self.file_info.get(basename)
         sheet_names = info.get('sheets') if info else None
         self.sheet_list_model.setStringList(sheet_names if sheet_names else [])
-
 
     def add_sheet_to_merge(self):
         if not self.radioButtonChoice.isChecked():
@@ -715,7 +484,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         save_path, _ = QFileDialog.getSaveFileName(self, "Save Merged File", "", "Excel Files (*.xlsx)")
         if save_path:
             self.lineEditSavePath.setText(save_path)
-            self.save_settings()
+            self.gather_and_save_settings()
 
     def open_save_path_directory(self):
         path = self.lineEditSavePath.text()
@@ -809,215 +578,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         self.merge_list_model.setStringList(specific_sheets_to_merge)
 
-    def handle_encrypted_file(self, file_path):
-        if self.stop_asking_for_passwords:
-            self.txtLogOutput.append(f"비밀번호 입력을 중단하여 파일을 건너뜁니다: {os.path.basename(file_path)}")
-            if self.debug_mode:
-                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (stopped asking).") # ADD LOG
-            return None
-
-        self.txtLogOutput.append(f"암호화된 파일 감지: {os.path.basename(file_path)}")
-        password = None
-        decrypted_file_buffer = None
-        basename = os.path.basename(file_path)
-        temp_decrypted_path = None
-
-        # Password check order: 1. File-specific, 2. Global, 3. User prompt
-        if basename in self.file_passwords:
-            try:
-                self.txtLogOutput.append(f'{basename}에 대해 기억된 비밀번호로 열기 시도...')
-                decrypted_file_buffer = io.BytesIO()
-                with open(file_path, 'rb') as f:
-                    office_file = msoffcrypto.OfficeFile(f)
-                    office_file.load_key(password=self.file_passwords[basename])
-                    office_file.decrypt(decrypted_file_buffer)
-                password = self.file_passwords[basename]
-                self.txtLogOutput.append("기억된 비밀번호로 열기 성공.")
-            except Exception:
-                self.txtLogOutput.append("기억된 비밀번호 실패.")
-                decrypted_file_buffer = None
-
-        if not password and self.use_global_password and self.global_password:
-            try:
-                self.txtLogOutput.append("전역 비밀번호로 열기 시도...")
-                decrypted_file_buffer = io.BytesIO()
-                with open(file_path, 'rb') as f:
-                    office_file = msoffcrypto.OfficeFile(f)
-                    office_file.load_key(password=self.global_password)
-                    office_file.decrypt(decrypted_file_buffer)
-                password = self.global_password
-                self.file_passwords[basename] = self.global_password
-                self.txtLogOutput.append("전역 비밀번호로 열기 성공.")
-            except Exception as e:
-                self.txtLogOutput.append(f"전역 비밀번호 실패: {e}")
-                decrypted_file_buffer = None
-
-        if not password:
-            if self.debug_mode:
-                self.txtLogOutput.append(f"DEBUG: Showing PasswordDialog for {basename}.")
-            dialog = PasswordDialog(basename, self)
-            result = dialog.exec()
-
-            if dialog.stopped:
-                self.stop_asking_for_passwords = True
-                self.txtLogOutput.append("사용자가 중단하여 이후 암호 입력을 건너뜁니다.")
-                if self.debug_mode:
-                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog stopped).")
-                return None
-
-            if result:
-                user_password = dialog.lineEditKeepPassword.text()
-                if user_password:
-                    try:
-                        self.txtLogOutput.append("사용자 입력 비밀번호로 열기 시도...")
-                        decrypted_file_buffer = io.BytesIO()
-                        with open(file_path, 'rb') as f:
-                            office_file = msoffcrypto.OfficeFile(f)
-                            office_file.load_key(password=user_password)
-                            office_file.decrypt(decrypted_file_buffer)
-                        password = user_password
-                        self.txtLogOutput.append("사용자 입력 비밀번호로 열기 성공.")
-                        self.file_passwords[basename] = user_password
-                        if dialog.chkKeepPassword.isChecked():
-                            self.global_password = user_password
-                            self.use_global_password = True
-                    except Exception as e:
-                        self.txtLogOutput.append(f"사용자 입력 비밀번호 실패: {e}")
-                        if self.debug_mode:
-                            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (user password failed).")
-                        return None
-                else:
-                    self.txtLogOutput.append("비밀번호가 입력되지 않아 파일을 건너뜁니다.")
-                    if self.debug_mode:
-                        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (empty user password).")
-                    return None
-            else:
-                self.txtLogOutput.append("사용자가 취소하여 파일을 건너뜁니다.")
-                if self.debug_mode:
-                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog cancelled).")
-                return None
-
-        if password and decrypted_file_buffer:
-            fd, temp_decrypted_path = tempfile.mkstemp(suffix=os.path.splitext(file_path)[1], prefix='decrypted_')
-            os.close(fd)
-            with open(temp_decrypted_path, 'wb') as tmp_f:
-                tmp_f.write(decrypted_file_buffer.getbuffer())
-            self.temp_files.append(temp_decrypted_path)
-            if self.debug_mode:
-                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning decrypted path: {temp_decrypted_path}")
-            return temp_decrypted_path
-        
-        if self.debug_mode:
-            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (no password worked).")
-        return None
-
-    def perform_sheet_trim(self, workbook, excel_app=None):
-        sheet_trim_value = self.options.get('sheet_trim_value', 0)
-        if sheet_trim_value <= 0:
-            return
-
-        trim_rows = self.options.get('sheet_trim_rows', False)
-        trim_cols = self.options.get('sheet_trim_cols', False)
-        if not trim_rows and not trim_cols:
-            return
-
-        self.txtLogOutput.append("시트 정리(SheetTrim) 기능 수행 중...")
-        is_win32 = excel_app is not None
-
-        if is_win32:
-            for worksheet in workbook.Worksheets:
-                if trim_rows:
-                    empty_row_indices = []
-                    for i in range(1, worksheet.UsedRange.Row + worksheet.UsedRange.Rows.Count):
-                        if excel_app.WorksheetFunction.CountA(worksheet.Rows(i)) == 0:
-                            empty_row_indices.append(i)
-                    
-                    if empty_row_indices:
-                        blocks = []
-                        start_of_block = empty_row_indices[0]
-                        for i in range(1, len(empty_row_indices)):
-                            if empty_row_indices[i] != empty_row_indices[i-1] + 1:
-                                block_len = empty_row_indices[i-1] - start_of_block + 1
-                                if block_len >= sheet_trim_value:
-                                    blocks.append((start_of_block, block_len))
-                                start_of_block = empty_row_indices[i]
-                        block_len = empty_row_indices[-1] - start_of_block + 1
-                        if block_len >= sheet_trim_value:
-                            blocks.append((start_of_block, block_len))
-
-                        for start, count in reversed(blocks):
-                            worksheet.Rows(f'{start}:{start+count-1}').Delete()
-
-                if trim_cols:
-                    empty_col_indices = []
-                    for i in range(1, worksheet.UsedRange.Column + worksheet.UsedRange.Columns.Count):
-                        if excel_app.WorksheetFunction.CountA(worksheet.Columns(i)) == 0:
-                            empty_col_indices.append(i)
-
-                    if empty_col_indices:
-                        blocks = []
-                        start_of_block = empty_col_indices[0]
-                        for i in range(1, len(empty_col_indices)):
-                            if empty_col_indices[i] != empty_col_indices[i-1] + 1:
-                                block_len = empty_col_indices[i-1] - start_of_block + 1
-                                if block_len >= sheet_trim_value:
-                                    blocks.append((start_of_block, block_len))
-                                start_of_block = empty_col_indices[i]
-                        block_len = empty_col_indices[-1] - start_of_block + 1
-                        if block_len >= sheet_trim_value:
-                            blocks.append((start_of_block, block_len))
-
-                        for start, count in reversed(blocks):
-                            for c in range(start + count - 1, start - 1, -1):
-                                worksheet.Columns(c).Delete()
-        else: # openpyxl
-            for worksheet in workbook.worksheets:
-                if trim_rows:
-                    empty_row_indices = []
-                    for i in range(1, worksheet.max_row + 1):
-                        if all(c.value is None or str(c.value).strip() == '' for c in worksheet[i]):
-                            empty_row_indices.append(i)
-                    
-                    if empty_row_indices:
-                        blocks = []
-                        start_of_block = empty_row_indices[0]
-                        for i in range(1, len(empty_row_indices)):
-                            if empty_row_indices[i] != empty_row_indices[i-1] + 1:
-                                block_len = empty_row_indices[i-1] - start_of_block + 1
-                                if block_len >= sheet_trim_value:
-                                    blocks.append((start_of_block, block_len))
-                                start_of_block = empty_row_indices[i]
-                        block_len = empty_row_indices[-1] - start_of_block + 1
-                        if block_len >= sheet_trim_value:
-                            blocks.append((start_of_block, block_len))
-
-                        for start, count in reversed(blocks):
-                            worksheet.delete_rows(start, count)
-
-                if trim_cols:
-                    empty_col_indices = []
-                    for i, col in enumerate(worksheet.iter_cols(), 1):
-                        if all(cell.value is None or str(cell.value).strip() == "" for cell in col):
-                            empty_col_indices.append(i)
-
-                    if empty_col_indices:
-                        blocks = []
-                        start_of_block = empty_col_indices[0]
-                        for i in range(1, len(empty_col_indices)):
-                            if empty_col_indices[i] != empty_col_indices[i-1] + 1:
-                                block_len = empty_col_indices[i-1] - start_of_block + 1
-                                if block_len >= sheet_trim_value:
-                                    blocks.append((start_of_block, block_len))
-                                start_of_block = empty_col_indices[i]
-                        block_len = empty_col_indices[-1] - start_of_block + 1
-                        if block_len >= sheet_trim_value:
-                            blocks.append((start_of_block, block_len))
-
-                        for start, count in reversed(blocks):
-                            worksheet.delete_cols(start, count)
-
-        self.txtLogOutput.append("시트 정리(SheetTrim) 완료.")
-
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
         if not sheets_to_merge:
@@ -1060,19 +620,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             if merge_type == 'Sheet':
                 if use_win32_merge: # Use win32 merge if available, regardless of only_value_copy
-                    self.merge_as_sheets_win32(sheets_to_merge, save_path)
+                    self.merger_win32.merge_as_sheets_win32(sheets_to_merge, save_path)
                 else:
-                    self.merge_as_sheets(sheets_to_merge, save_path)
+                    self.merger.merge_as_sheets(sheets_to_merge, save_path)
             elif merge_type == 'Horizontal':
                 if use_win32_merge:
-                    self.merge_horizontally_win32(sheets_to_merge, save_path)
+                    self.merger_win32.merge_horizontally_win32(sheets_to_merge, save_path)
                 else:
-                    self.merge_horizontally(sheets_to_merge, save_path)
+                    self.merger.merge_horizontally(sheets_to_merge, save_path)
             elif merge_type == 'Vertical':
                 if use_win32_merge:
-                    self.merge_vertically_win32(sheets_to_merge, save_path)
+                    self.merger_win32.merge_vertically_win32(sheets_to_merge, save_path)
                 else:
-                    self.merge_vertically(sheets_to_merge, save_path)
+                    self.merger.merge_vertically(sheets_to_merge, save_path)
             
             # Encrypt output file if needed
             if self.encrypt_output and self.output_encryption_password:
@@ -1103,406 +663,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     subprocess.run(['xdg-open', os.path.dirname(os.path.abspath(save_path))])
             except Exception as e:
                 self.txtLogOutput.append(f"저장 경로를 열 수 없습니다: {e}")
-
-    def merge_as_sheets_win32(self, sheets_to_merge, save_path):
-        excel = None
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            merged_workbook = excel.Workbooks.Add()
-
-            # The default workbook has one sheet, we need to know its name to delete it later
-            default_sheet_name = merged_workbook.Worksheets(1).Name
-
-            total_sheets = len(sheets_to_merge)
-            for i, item in enumerate(sheets_to_merge):
-                file_name, sheet_name = item.split('/', 1)
-                self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
-
-                info = self.file_info.get(file_name)
-                if not info:
-                    self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
-                    continue
-                
-                processed_path = os.path.abspath(info['processed_path'])
-
-                password = self.file_passwords.get(file_name)
-                
-                try:
-                    if password:
-                        if self.debug_mode:
-                            self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
-                    else:
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
-                    
-                    source_sheet = source_workbook.Worksheets(sheet_name)
-                    
-                    # Copy sheet to the end of the merged workbook
-                    source_sheet.Copy(After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count))
-                    
-                    # Get the newly copied sheet
-                    newly_copied_sheet = merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
-                    
-                    source_workbook.Close(SaveChanges=False)
-                except Exception as e:
-                    self.txtLogOutput.append(f"시트 복사 오류 (win32) {item}: {e}")
-                
-                self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
-
-            # Delete the default sheet that was created with the new workbook
-            if merged_workbook.Worksheets.Count > 1:
-                try:
-                    merged_workbook.Worksheets(default_sheet_name).Delete()
-                except:
-                    # Ignore error if sheet is already gone or name is different
-                    pass
-
-            # If only_value_copy is enabled, convert all formulas to values in the merged workbook
-            if self.options['only_value_copy']:
-                if self.debug_mode:
-                    self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
-                for ws in merged_workbook.Worksheets:
-                    # Get the used range of the worksheet
-                    used_range = ws.UsedRange
-                    # Copy the used range
-                    used_range.Copy()
-                    # Paste special values to the same range
-                    used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
-                    # Clear the clipboard
-                    excel.CutCopyMode = False
-
-            self.perform_sheet_trim(merged_workbook, excel)
-
-            # Suppress alerts to automatically overwrite existing files
-            merged_workbook.SaveAs(os.path.abspath(save_path))
-            merged_workbook.Close(SaveChanges=False)
-
-        except Exception as e:
-            self.txtLogOutput.append(f"win32 병합 오류: {e}")
-        finally:
-            if excel:
-                excel.DisplayAlerts = True
-                excel.Application.Quit()
-
-    def merge_horizontally_win32(self, sheets_to_merge, save_path):
-        excel = None
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            output_workbook = excel.Workbooks.Add()
-            output_sheet = output_workbook.Worksheets(1)
-            output_sheet.Name = "Merged_Sheet"
-
-            total_sheets = len(sheets_to_merge)
-            last_col = 0
-            for i, item in enumerate(sheets_to_merge):
-                file_name, sheet_name = item.split('/', 1)
-                self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
-
-                info = self.file_info.get(file_name)
-                if not info:
-                    self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
-                    continue
-                
-                processed_path = os.path.abspath(info['processed_path'])
-                
-                password = self.file_passwords.get(file_name)
-
-                try:
-                    if password:
-                        if self.debug_mode:
-                            self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
-                    else:
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
-                    
-                    source_sheet = source_workbook.Worksheets(sheet_name)
-                    
-                    source_range = source_sheet.UsedRange
-                    if source_range.Columns.Count > 0:
-                        source_range.Copy()
-                        
-                        destination_range = output_sheet.Cells(1, last_col + 1)
-                        output_sheet.Paste(Destination=destination_range)
-                        
-                        last_col += source_range.Columns.Count
-                    
-                    source_workbook.Close(SaveChanges=False)
-                except Exception as e:
-                    self.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
-                
-                self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
-
-            if self.options['only_value_copy']:
-                self.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
-                used_range = output_sheet.UsedRange
-                used_range.Copy()
-                used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
-                excel.CutCopyMode = False
-
-            self.perform_sheet_trim(output_workbook, excel)
-
-            output_workbook.SaveAs(os.path.abspath(save_path))
-            output_workbook.Close(SaveChanges=False)
-
-        except Exception as e:
-            self.txtLogOutput.append(f"win32 병합 오류: {e}")
-        finally:
-            if excel:
-                excel.DisplayAlerts = True
-                excel.Application.Quit()
-
-    def merge_vertically_win32(self, sheets_to_merge, save_path):
-        excel = None
-        try:
-            excel = win32.gencache.EnsureDispatch('Excel.Application')
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            output_workbook = excel.Workbooks.Add()
-            output_sheet = output_workbook.Worksheets(1)
-            output_sheet.Name = "Merged_Sheet"
-
-            total_sheets = len(sheets_to_merge)
-            last_row = 0
-            for i, item in enumerate(sheets_to_merge):
-                file_name, sheet_name = item.split('/', 1)
-                self.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
-
-                info = self.file_info.get(file_name)
-                if not info:
-                    self.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
-                    continue
-                
-                processed_path = os.path.abspath(info['processed_path'])
-                
-                password = self.file_passwords.get(file_name)
-
-                try:
-                    if password:
-                        if self.debug_mode:
-                            self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
-                    else:
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
-                    
-                    source_sheet = source_workbook.Worksheets(sheet_name)
-                    
-                    source_range = source_sheet.UsedRange
-                    if source_range.Rows.Count > 0:
-                        source_range.Copy()
-                        
-                        destination_range = output_sheet.Cells(last_row + 1, 1)
-                        output_sheet.Paste(Destination=destination_range)
-                        
-                        last_row += source_range.Rows.Count
-                    
-                    source_workbook.Close(SaveChanges=False)
-                except Exception as e:
-                    self.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
-                
-                self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
-
-            if self.options['only_value_copy']:
-                self.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
-                used_range = output_sheet.UsedRange
-                used_range.Copy()
-                used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
-                excel.CutCopyMode = False
-
-            self.perform_sheet_trim(output_workbook, excel)
-
-            output_workbook.SaveAs(os.path.abspath(save_path))
-            output_workbook.Close(SaveChanges=False)
-
-        except Exception as e:
-            self.txtLogOutput.append(f"win32 병합 오류: {e}")
-        finally:
-            if excel:
-                excel.DisplayAlerts = True
-                excel.Application.Quit()
-
-    def merge_as_sheets(self, sheets_to_merge, save_path):
-        output_workbook = openpyxl.Workbook()
-        output_workbook.remove(output_workbook.active) # Remove default sheet
-
-        total_sheets = len(sheets_to_merge)
-        for i, item in enumerate(sheets_to_merge):
-            file_name, sheet_name = item.split('/', 1)
-            file_path = self.file_info.get(file_name, {}).get('processed_path')
-            
-            if not file_path:
-                self.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
-                continue
-
-            try:
-                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy']) # Pass data_only flag
-                if not source_workbook:
-                    continue
-
-                if file_path.endswith('.xlsx'):
-                    source_sheet = source_workbook[sheet_name]
-                else: # .xls
-                    source_sheet = source_workbook.sheet_by_name(sheet_name)
-
-                # New sheet naming logic
-                sheet_name_rule = self.options.get('sheet_name_rule', 'OriginalBoth')
-                if sheet_name_rule == 'OriginalBoth':
-                    new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
-                else: # OriginalSheet
-                    new_sheet_name = sheet_name
-
-                # Sanitize and truncate
-                if len(new_sheet_name) > 31:
-                    self.txtLogOutput.append(f"시트 이름이 31자를 초과하여 일부 잘립니다: {new_sheet_name}")
-                    new_sheet_name = new_sheet_name[:31]
-                new_sheet_name = re.sub(r'[\\\[\]\*\:\?/]', '_', new_sheet_name)
-
-                # Handle duplicates
-                original_new_sheet_name = new_sheet_name
-                counter = 2
-                while new_sheet_name in output_workbook.sheetnames:
-                    suffix = f" ({counter})"
-                    truncated_len = 31 - len(suffix)
-                    new_sheet_name = f"{original_new_sheet_name[:truncated_len]}{suffix}"
-                    counter += 1
-                
-                output_sheet = output_workbook.create_sheet(title=new_sheet_name)
-                self.copy_sheet_data(source_sheet, output_sheet, file_name=file_name)
-
-            except Exception as e:
-                self.txtLogOutput.append(f"시트 복사 오류 {item}: {e}")
-
-            self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
-
-        if self.options['only_value_copy']:
-            if self.debug_mode:
-                self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중 (openpyxl)...")
-            for sheet in output_workbook.worksheets:
-                for row in sheet.iter_rows():
-                    for cell in row:
-                        if cell.data_type == 'f':
-                            cell.value = cell.value
-
-        self.perform_sheet_trim(output_workbook)
-
-        output_workbook.save(save_path)
-
-    def merge_horizontally(self, sheets_to_merge, save_path):
-        output_workbook = openpyxl.Workbook()
-        output_sheet = output_workbook.active
-        output_sheet.title = "Merged_Sheet"
-
-        total_sheets = len(sheets_to_merge)
-        last_col = 0
-        for i, item in enumerate(sheets_to_merge):
-            file_name, sheet_name = item.split('/', 1)
-            self.lblCurrentFile.setText(f'{item} 병합 중...')
-
-            file_path = self.file_info.get(file_name, {}).get('processed_path')
-
-            if not file_path:
-                self.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
-                continue
-
-            try:
-                source_workbook = self._open_workbook(file_path, file_name, data_only=False) # Always load with formulas
-                if not source_workbook:
-                    continue
-
-                if file_path.endswith('.xlsx'):
-                    source_sheet = source_workbook[sheet_name]
-                else: # .xls
-                    source_sheet = source_workbook.sheet_by_name(sheet_name)
-                
-                self.copy_sheet_data(source_sheet, output_sheet, start_col=last_col + 1, file_name=file_name)
-                last_col = output_sheet.max_column
-
-            except Exception as e:
-                self.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
-
-            self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
-
-        if self.options['only_value_copy']:
-            self.txtLogOutput.append("수식을 값으로 변환 중...")
-            for row in output_sheet.iter_rows():
-                for cell in row:
-                    if cell.data_type == 'f':
-                        cell.value = cell.value
-
-        self.perform_sheet_trim(output_workbook)
-
-        output_workbook.save(save_path)
-
-    def merge_vertically(self, sheets_to_merge, save_path):
-        output_workbook = openpyxl.Workbook()
-        output_sheet = output_workbook.active
-        output_sheet.title = "Merged_Sheet"
-
-        total_sheets = len(sheets_to_merge)
-        last_row = 0
-        for i, item in enumerate(sheets_to_merge):
-            file_name, sheet_name = item.split('/', 1)
-            self.lblCurrentFile.setText(f'{item} 병합 중...')
-
-            file_path = self.file_info.get(file_name, {}).get('processed_path')
-
-            if not file_path:
-                self.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
-                continue
-
-            try:
-                source_workbook = self._open_workbook(file_path, file_name, data_only=self.options['only_value_copy']) # Pass data_only flag
-                if not source_workbook:
-                    continue
-
-                if file_path.endswith('.xlsx'):
-                    source_sheet = source_workbook[sheet_name]
-                else: # .xls
-                    source_sheet = source_workbook.sheet_by_name(sheet_name)
-
-                self.copy_sheet_data(source_sheet, output_sheet, start_row=last_row + 1, file_name=file_name)
-                last_row = output_sheet.max_row
-
-            except Exception as e:
-                self.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
-
-            self.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
-
-        self.perform_sheet_trim(output_workbook)
-
-        output_workbook.save(save_path)
-
-    def copy_sheet_data(self, source_sheet, output_sheet, start_row=1, start_col=1, file_name=""):
-        if isinstance(source_sheet, openpyxl.worksheet.worksheet.Worksheet):
-            for row in source_sheet.iter_rows():
-                for cell in row:
-                    new_cell = output_sheet.cell(row=cell.row + start_row - 1, column=cell.column + start_col - 1)
-                    new_cell.value = cell.value
-                    if cell.has_style:
-                        new_cell.font = cell.font.copy()
-                        new_cell.border = cell.border.copy()
-                        new_cell.fill = cell.fill.copy()
-                        new_cell.number_format = cell.number_format
-                        new_cell.protection = cell.protection.copy()
-                        new_cell.alignment = cell.alignment.copy()
-        elif isinstance(source_sheet, xlrd.sheet.Sheet):
-            self.txtLogOutput.append(f".xls 파일({file_name}/{source_sheet.name})의 서식은 일부만 지원됩니다.")
-            for row_idx in range(source_sheet.nrows):
-                for col_idx in range(source_sheet.ncols):
-                    cell_value = source_sheet.cell_value(row_idx, col_idx)
-                    output_sheet.cell(row=row_idx + start_row, column=col_idx + start_col).value = cell_value
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
