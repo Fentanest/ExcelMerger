@@ -911,6 +911,113 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (no password worked).")
         return None
 
+    def perform_sheet_trim(self, workbook, excel_app=None):
+        sheet_trim_value = self.options.get('sheet_trim_value', 0)
+        if sheet_trim_value <= 0:
+            return
+
+        trim_rows = self.options.get('sheet_trim_rows', False)
+        trim_cols = self.options.get('sheet_trim_cols', False)
+        if not trim_rows and not trim_cols:
+            return
+
+        self.txtLogOutput.append("시트 정리(SheetTrim) 기능 수행 중...")
+        is_win32 = excel_app is not None
+
+        if is_win32:
+            for worksheet in workbook.Worksheets:
+                if trim_rows:
+                    empty_row_indices = []
+                    for i in range(1, worksheet.UsedRange.Row + worksheet.UsedRange.Rows.Count):
+                        if excel_app.WorksheetFunction.CountA(worksheet.Rows(i)) == 0:
+                            empty_row_indices.append(i)
+                    
+                    if empty_row_indices:
+                        blocks = []
+                        start_of_block = empty_row_indices[0]
+                        for i in range(1, len(empty_row_indices)):
+                            if empty_row_indices[i] != empty_row_indices[i-1] + 1:
+                                block_len = empty_row_indices[i-1] - start_of_block + 1
+                                if block_len >= sheet_trim_value:
+                                    blocks.append((start_of_block, block_len))
+                                start_of_block = empty_row_indices[i]
+                        block_len = empty_row_indices[-1] - start_of_block + 1
+                        if block_len >= sheet_trim_value:
+                            blocks.append((start_of_block, block_len))
+
+                        for start, count in reversed(blocks):
+                            worksheet.Rows(f'{start}:{start+count-1}').Delete()
+
+                if trim_cols:
+                    empty_col_indices = []
+                    for i in range(1, worksheet.UsedRange.Column + worksheet.UsedRange.Columns.Count):
+                        if excel_app.WorksheetFunction.CountA(worksheet.Columns(i)) == 0:
+                            empty_col_indices.append(i)
+
+                    if empty_col_indices:
+                        blocks = []
+                        start_of_block = empty_col_indices[0]
+                        for i in range(1, len(empty_col_indices)):
+                            if empty_col_indices[i] != empty_col_indices[i-1] + 1:
+                                block_len = empty_col_indices[i-1] - start_of_block + 1
+                                if block_len >= sheet_trim_value:
+                                    blocks.append((start_of_block, block_len))
+                                start_of_block = empty_col_indices[i]
+                        block_len = empty_col_indices[-1] - start_of_block + 1
+                        if block_len >= sheet_trim_value:
+                            blocks.append((start_of_block, block_len))
+
+                        for start, count in reversed(blocks):
+                            for c in range(start + count - 1, start - 1, -1):
+                                worksheet.Columns(c).Delete()
+        else: # openpyxl
+            for worksheet in workbook.worksheets:
+                if trim_rows:
+                    empty_row_indices = []
+                    for i in range(1, worksheet.max_row + 1):
+                        if all(c.value is None or str(c.value).strip() == '' for c in worksheet[i]):
+                            empty_row_indices.append(i)
+                    
+                    if empty_row_indices:
+                        blocks = []
+                        start_of_block = empty_row_indices[0]
+                        for i in range(1, len(empty_row_indices)):
+                            if empty_row_indices[i] != empty_row_indices[i-1] + 1:
+                                block_len = empty_row_indices[i-1] - start_of_block + 1
+                                if block_len >= sheet_trim_value:
+                                    blocks.append((start_of_block, block_len))
+                                start_of_block = empty_row_indices[i]
+                        block_len = empty_row_indices[-1] - start_of_block + 1
+                        if block_len >= sheet_trim_value:
+                            blocks.append((start_of_block, block_len))
+
+                        for start, count in reversed(blocks):
+                            worksheet.delete_rows(start, count)
+
+                if trim_cols:
+                    empty_col_indices = []
+                    for i, col in enumerate(worksheet.iter_cols(), 1):
+                        if all(cell.value is None or str(cell.value).strip() == "" for cell in col):
+                            empty_col_indices.append(i)
+
+                    if empty_col_indices:
+                        blocks = []
+                        start_of_block = empty_col_indices[0]
+                        for i in range(1, len(empty_col_indices)):
+                            if empty_col_indices[i] != empty_col_indices[i-1] + 1:
+                                block_len = empty_col_indices[i-1] - start_of_block + 1
+                                if block_len >= sheet_trim_value:
+                                    blocks.append((start_of_block, block_len))
+                                start_of_block = empty_col_indices[i]
+                        block_len = empty_col_indices[-1] - start_of_block + 1
+                        if block_len >= sheet_trim_value:
+                            blocks.append((start_of_block, block_len))
+
+                        for start, count in reversed(blocks):
+                            worksheet.delete_cols(start, count)
+
+        self.txtLogOutput.append("시트 정리(SheetTrim) 완료.")
+
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
         if not sheets_to_merge:
@@ -1068,6 +1175,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     # Clear the clipboard
                     excel.CutCopyMode = False
 
+            self.perform_sheet_trim(merged_workbook, excel)
+
             # Suppress alerts to automatically overwrite existing files
             merged_workbook.SaveAs(os.path.abspath(save_path))
             merged_workbook.Close(SaveChanges=False)
@@ -1138,6 +1247,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
                 excel.CutCopyMode = False
 
+            self.perform_sheet_trim(output_workbook, excel)
+
             output_workbook.SaveAs(os.path.abspath(save_path))
             output_workbook.Close(SaveChanges=False)
 
@@ -1206,6 +1317,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 used_range.Copy()
                 used_range.PasteSpecial(Paste=win32.constants.xlPasteValues)
                 excel.CutCopyMode = False
+
+            self.perform_sheet_trim(output_workbook, excel)
 
             output_workbook.SaveAs(os.path.abspath(save_path))
             output_workbook.Close(SaveChanges=False)
@@ -1280,6 +1393,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         if cell.data_type == 'f':
                             cell.value = cell.value
 
+        self.perform_sheet_trim(output_workbook)
+
         output_workbook.save(save_path)
 
     def merge_horizontally(self, sheets_to_merge, save_path):
@@ -1325,6 +1440,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     if cell.data_type == 'f':
                         cell.value = cell.value
 
+        self.perform_sheet_trim(output_workbook)
+
         output_workbook.save(save_path)
 
     def merge_vertically(self, sheets_to_merge, save_path):
@@ -1363,27 +1480,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.progressBar.setValue(int((i + 1) / total_sheets * 100))
             QApplication.processEvents()
 
+        self.perform_sheet_trim(output_workbook)
+
         output_workbook.save(save_path)
 
     def copy_sheet_data(self, source_sheet, output_sheet, start_row=1, start_col=1, file_name=""):
-        # SheetTrim logic is simplified and only works for .xlsx (openpyxl)
-        if self.options.get('sheet_trim_value', 0) > 0 and isinstance(source_sheet, openpyxl.worksheet.worksheet.Worksheet):
-            if self.options.get('sheet_trim_rows', False):
-                rows_to_delete = []
-                for i, row in enumerate(source_sheet.iter_rows()):
-                    if all(cell.value is None or str(cell.value).strip() == "" for cell in row):
-                        rows_to_delete.append(i + 1)
-                for row_idx in sorted(rows_to_delete, reverse=True):
-                    source_sheet.delete_rows(row_idx, 1)
-
-            if self.options.get('sheet_trim_cols', False):
-                cols_to_delete = []
-                for i, col in enumerate(source_sheet.iter_cols()):
-                    if all(cell.value is None or str(cell.value).strip() == "" for cell in col):
-                        cols_to_delete.append(i + 1)
-                for col_idx in sorted(cols_to_delete, reverse=True):
-                    source_sheet.delete_cols(col_idx, 1)
-
         if isinstance(source_sheet, openpyxl.worksheet.worksheet.Worksheet):
             for row in source_sheet.iter_rows():
                 for cell in row:
