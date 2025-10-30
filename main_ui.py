@@ -121,6 +121,7 @@ class Ui_MainWindow(object):
         self.listSheetToMerge.setAcceptDrops(True)
         self.listSheetToMerge.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.listSheetToMerge.setDragEnabled(True)
+        self.listSheetToMerge.setDragDropOverwriteMode(False)
         self.listSheetToMerge.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.listSheetToMerge.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.listSheetToMerge.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)

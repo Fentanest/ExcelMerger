@@ -148,7 +148,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listFileAdded.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.listFileAdded.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.listFileAdded.setDefaultDropAction(Qt.DropAction.MoveAction)
-        self.listFileAdded.setAcceptDrops(False) # Allow dropping files
+        self.listFileAdded.setAcceptDrops(True) # Allow dropping files
 
         self.listSheetInFile.setDragEnabled(True)
         self.listSheetInFile.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -198,7 +198,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listSheetInFile.installEventFilter(self)
         
         # Drag and Drop
-        self.setAcceptDrops(True)
+        self.setAcceptDrops(False)
         self.drag_start_position = None
 
 
@@ -432,7 +432,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return None, None # Should not be reached if workbook is valid
 
     def eventFilter(self, source, event):
-        # Drag start
+        # File drop on listFileAdded
+        if source == self.listFileAdded:
+            if event.type() == QEvent.Type.DragEnter:
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+                    return True
+            elif event.type() == QEvent.Type.Drop:
+                if event.mimeData().hasUrls():
+                    files = [url.toLocalFile() for url in event.mimeData().urls()]
+                    self.add_files(files)
+                    event.acceptProposedAction()
+                    return True
+
+        # Drag start from listSheetInFile
         if source == self.listSheetInFile.viewport():
             if event.type() == QEvent.Type.MouseButtonPress:
                 self.drag_start_position = event.pos()
@@ -440,17 +453,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 if (event.pos() - self.drag_start_position).manhattanLength() > QApplication.startDragDistance():
                     self.perform_drag_sheet_in_file()
         
-        # External drop on listSheetToMerge
-        elif source == self.listSheetToMerge and event.type() in (QEvent.Type.DragEnter, QEvent.Type.Drop):
+        # Drag/Drop on listSheetToMerge
+        elif source == self.listSheetToMerge and event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
             if event.mimeData().hasFormat("application/x-sheet-data"):
-                if event.type() == QEvent.Type.DragEnter:
+                # External drop from listSheetInFile
+                if event.type() != QEvent.Type.Drop:
                     event.acceptProposedAction()
-                else: # Drop
+                else:
                     self.handle_sheet_drop(event)
                 return True # We handled it
             else:
-                # It's an internal move, let the widget handle it
-                return False
+                # Internal move
+                event.setDropAction(Qt.DropAction.MoveAction)
+                return False # Let the widget handle it with the forced action
 
         # Key presses
         elif event.type() == QEvent.Type.KeyPress:
@@ -468,23 +483,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         return super().eventFilter(source, event)
 
-    def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            event.ignore()
+
 
     def dragMoveEvent(self, event):
         if event.mimeData().hasFormat("application/x-sheet-data"):
             event.acceptProposedAction()
 
-    def dropEvent(self, event):
-        if event.mimeData().hasUrls():
-            files = [url.toLocalFile() for url in event.mimeData().urls()]
-            self.add_files(files)
-            event.acceptProposedAction()
-        else:
-            event.ignore()
+
 
     def perform_drag_sheet_in_file(self):
         indexes = self.listSheetInFile.selectedIndexes()
