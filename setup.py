@@ -5,7 +5,7 @@ from cx_Freeze import setup, Executable
 build_exe_options = {
     "packages": ["os", "sys", "re", "openpyxl", "xlrd", "msoffcrypto", "cffi", "cryptography"],
     "includes": ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"],
-    "include_files": ["lib/logo.png"],
+    "include_files": [("lib/logo.png", "lib/logo.png"), ("lib/logo.ico", "lib/logo.ico")]
     "excludes": []
 }
 
@@ -19,5 +19,12 @@ setup(
     version="1.0",
     description="Excel File Merger",
     options={"build_exe": build_exe_options},
-    executables=[Executable("main.py", base=base)],
+    executables=[
+        Executable(
+            "main.py",
+            base=base,
+            target_name="ExcelMerger.exe",  # 생성될 exe 파일명 지정
+            icon="lib/logo.ico"             # ico 파일 경로 지정 (png 아님)
+        )
+    ],
 )

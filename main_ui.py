@@ -240,6 +240,8 @@ class Ui_MainWindow(object):
         self.menu_2.setObjectName(u"menu_2")
         self.menu_3 = QMenu(self.menubar)
         self.menu_3.setObjectName(u"menu_3")
+        self.menuMade_by_Fentanest = QMenu(self.menubar)
+        self.menuMade_by_Fentanest.setObjectName(u"menuMade_by_Fentanest")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName(u"statusbar")
@@ -248,6 +250,7 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu.menuAction())
         self.menubar.addAction(self.menu_2.menuAction())
         self.menubar.addAction(self.menu_3.menuAction())
+        self.menubar.addAction(self.menuMade_by_Fentanest.menuAction())
         self.menu.addAction(self.actionAddExcelFile)
         self.menu.addAction(self.actionSetSavePath)
         self.menu_2.addAction(self.actionSetGlobalPassword)
@@ -317,5 +320,6 @@ class Ui_MainWindow(object):
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"\ud30c\uc77c", None))
         self.menu_2.setTitle(QCoreApplication.translate("MainWindow", u"\uc635\uc158", None))
         self.menu_3.setTitle(QCoreApplication.translate("MainWindow", u"\uae30\ud0c0", None))
+        self.menuMade_by_Fentanest.setTitle(QCoreApplication.translate("MainWindow", u"Made by Fentanest", None))
     # retranslateUi
 
