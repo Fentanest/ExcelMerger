@@ -204,7 +204,7 @@ class Ui_Dialog(object):
         self.label.setText(QCoreApplication.translate("Dialog", u"\ub610\ub294", None))
         self.checkBoxEmptyColumn.setText(QCoreApplication.translate("Dialog", u"\uc5f4", None))
         self.label_2.setText(QCoreApplication.translate("Dialog", u"\uc81c\uac70", None))
-        self.groupBox_4.setTitle(QCoreApplication.translate("Dialog", u"\uc2dc\ud2b8 \uc774\ub984 \uaddc\uce59", None))
+        self.groupBox_4.setTitle(QCoreApplication.translate("Dialog", u"\uc2dc\ud2b8 \uc774\ub984 \uaddc\uce59(\uc2dc\ud2b8 \ubcd1\ud569 \uc804\uc6a9)", None))
         self.radioButtonOriginalBoth.setText(QCoreApplication.translate("Dialog", u"\uc6d0\ubcf8\ud30c\uc77c\uba85_\uc6d0\ubcf8\uc2dc\ud2b8\uba85", None))
 #if QT_CONFIG(shortcut)
         self.radioButtonOriginalBoth.setShortcut(QCoreApplication.translate("Dialog", u"Q", None))

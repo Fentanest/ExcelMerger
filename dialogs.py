@@ -46,7 +46,7 @@ class OptionsDialog(QDialog, Ui_OptionsDialog):
         # Set sheet name rule
         if options.get('sheet_name_rule') == 'OriginalBoth':
             self.radioButtonOriginalBoth.setChecked(True)
-        elif options.get('sheet_name_rule') == 'OriginalSheet':
+        else: # 'OriginalSheet' is the default
             self.radioButtonOriginalSheet.setChecked(True)
 
         # Set SheetTrim options

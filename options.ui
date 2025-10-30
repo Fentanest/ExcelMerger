@@ -294,7 +294,7 @@ border: 2px solid white;
     </font>
    </property>
    <property name="title">
-    <string>시트 이름 규칙</string>
+    <string>시트 이름 규칙(시트 병합 전용)</string>
    </property>
    <widget class="QWidget" name="layoutWidget_3">
     <property name="geometry">
