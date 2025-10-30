@@ -1,9 +1,11 @@
 import sys
 import os
+if 'GTK_MODULES' in os.environ:
+    del os.environ['GTK_MODULES']
 import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListView, QAbstractItemView, QDialog
-from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, QEvent, QPoint)
-from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence, QAction
+from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, QEvent, QPoint, QUrl)
+from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence, QAction, QDesktopServices
 
 from main_ui import Ui_MainWindow
 from dialogs import PasswordDialog, GlobalPasswordDialog, EncryptionDialog, OptionsDialog
@@ -104,6 +106,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionSetGlobalPassword.triggered.connect(self.open_global_password_dialog)
         self.actionSetOutputEncryption.triggered.connect(self.open_encryption_dialog)
         self.actionOptions.triggered.connect(self.open_options_dialog)
+        self.actionVisitBlog.triggered.connect(self.open_blog)
 
         self.actionActivateDebugMode.setObjectName(u"actionActivateDebugMode")
         self.actionOptions.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+O", None))
@@ -133,6 +136,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Connect checkBoxOnlyValue and set initial state
         self.checkBoxOnlyValue.setChecked(self.options['only_value_copy'])
         self.checkBoxOnlyValue.toggled.connect(self.on_only_value_copy_toggled)
+
+    def open_blog(self):
+        urls = ["https://hb.worklazy.net", "https://worklazy.net"]
+        for url_str in urls:
+            QDesktopServices.openUrl(QUrl(url_str))
 
     def closeEvent(self, event):
         # Clean up temporary files
