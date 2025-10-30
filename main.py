@@ -2,8 +2,8 @@ import sys
 import os
 import re
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListView, QAbstractItemView, QDialog
-from PySide6.QtCore import QStringListModel, Qt, QMimeData, QEvent, QPoint
-from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence
+from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, QEvent, QPoint)
+from PySide6.QtGui import QMouseEvent, QDrag, QKeySequence, QAction
 
 from main_ui import Ui_MainWindow
 from password_ui import Ui_Dialog as Ui_PasswordDialog
@@ -125,6 +125,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.use_global_password = False
         self.encrypt_output = False
         self.stop_asking_for_passwords = False
+        self.debug_mode = False
 
         # File paths management
         self.file_info = {}
@@ -180,9 +181,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
 
         # Password and Encryption actions
-        self.actionSetGlobalPassword.triggered.connect(self.open_global_password_dialog)
-        self.actionSetOutputEncryption.triggered.connect(self.open_encryption_dialog)
-        self.actionOptions.triggered.connect(self.open_options_dialog)
+        self.menu_2.addAction(self.actionSetGlobalPassword)
+        self.menu_2.addAction(self.actionSetOutputEncryption)
+        self.menu_2.addAction(self.actionOptions)
+
+
+        self.actionActivateDebugMode.setObjectName(u"actionActivateDebugMode")
+        self.actionOptions.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+O", None))
+#endif // QT_CONFIG(shortcut)
+
+
 
         # Set initial state
         self.radioButtonChoice.setChecked(True)
@@ -190,6 +198,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         # Install event filter for key presses
         self.listFileAdded.installEventFilter(self)
+        self.listFileAdded.viewport().installEventFilter(self)
         self.listSheetToMerge.installEventFilter(self)
         self.listSheetToMerge.viewport().installEventFilter(self)
         self.listSheetInFile.viewport().installEventFilter(self)
@@ -199,6 +208,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setAcceptDrops(False)
         self.drag_start_position = None
 
+
+        self.actionActivateDebugMode.toggled.connect(self.on_debug_mode_toggled)
 
         # Connect start button
         self.btnStart.clicked.connect(self.start_merge)
@@ -220,6 +231,69 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             except OSError as e:
                 self.txtLogOutput.append(f"임시 파일 삭제 오류 {temp_file}: {e}")
         super().closeEvent(event)
+
+    def perform_manual_move(self, list_view, model, event):
+        # This function manually handles the reordering of items in a model.
+        if self.debug_mode:
+            log_msg = f"--- D&D Debug ---\n"
+            log_msg += f"Event: {event.type()} on {list_view.objectName()}\n"
+            log_msg += f"Pos: {event.pos()}\n"
+            indicator_pos = list_view.dropIndicatorPosition()
+            index_at_pos = list_view.indexAt(event.pos())
+            log_msg += f"Indicator: {indicator_pos}\n"
+            log_msg += f"Index @ Pos: {index_at_pos.row()}\n"
+            selected_rows = [index.row() for index in list_view.selectedIndexes()]
+            log_msg += f"Selected: {selected_rows}"
+            self.txtLogOutput.append(log_msg)
+
+        if event.type() == QEvent.Type.Drop:
+            if self.debug_mode:
+                self.txtLogOutput.append("-> Drop detected. Applying manual move.")
+            
+            dest_index = list_view.indexAt(event.pos())
+            dest_row = dest_index.row()
+
+            if list_view.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.BelowItem:
+                dest_row += 1
+
+            if dest_row == -1:
+                dest_row = model.rowCount()
+
+            source_indexes = list_view.selectedIndexes()
+            source_rows = sorted([index.row() for index in source_indexes])
+            source_data = [model.stringList()[row] for row in source_rows]
+
+            if self.debug_mode:
+                self.txtLogOutput.append(f"-> Source Rows: {source_rows} | Source Data: {source_data}")
+                self.txtLogOutput.append(f"-> Initial Dest Row: {dest_row}")
+
+            data_list = model.stringList()
+            
+            for row in reversed(source_rows):
+                data_list.pop(row)
+
+            offset = 0
+            for row in source_rows:
+                if row < dest_row:
+                    offset += 1
+            dest_row -= offset
+            
+            if self.debug_mode:
+                self.txtLogOutput.append(f"-> Adjusted Dest Row: {dest_row}")
+
+            for item in source_data:
+                data_list.insert(dest_row, item)
+                dest_row += 1
+            
+            model.setStringList(data_list)
+            if self.debug_mode:
+                self.txtLogOutput.append("-> Manual move complete.")
+            
+            event.accept()
+            return True
+
+        event.setDropAction(Qt.DropAction.MoveAction)
+        return False
 
     def convert_xls_to_xlsx_win32(self, xls_path):
         if not win32:
@@ -297,6 +371,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.options['sheet_trim_rows'] = config['Options'].getboolean('sheet_trim_rows', False)
             self.options['sheet_trim_cols'] = config['Options'].getboolean('sheet_trim_cols', False)
             self.options['only_value_copy'] = config['Options'].getboolean('only_value_copy', False) # Load new option
+            self.debug_mode = config['Options'].getboolean('debug_mode', False)
+            self.actionActivateDebugMode.setChecked(self.debug_mode)
 
         if 'Paths' in config and 'last_save_path' in config['Paths']:
             self.lineEditSavePath.setText(config['Paths']['last_save_path'])
@@ -321,6 +397,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             config.add_section('Options')
         for key, value in self.options.items():
             config.set('Options', key, str(value))
+        config.set('Options', 'debug_mode', str(self.debug_mode))
 
         if not config.has_section('Paths'):
             config.add_section('Paths')
@@ -382,6 +459,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.options['only_value_copy'] = checked
         self.save_settings()
 
+    def on_debug_mode_toggled(self, checked):
+        self.debug_mode = checked
+        self.txtLogOutput.append(f"디버그 모드: {'활성' if checked else '비활성'}")
+        self.save_settings()
+
     def _open_workbook(self, file_path, file_name, data_only=False): # Add data_only flag
         try:
             if file_path.endswith('.xlsx'):
@@ -431,17 +513,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def eventFilter(self, source, event):
         # File drop on listFileAdded
-        if source == self.listFileAdded:
-            if event.type() == QEvent.Type.DragEnter:
-                if event.mimeData().hasUrls():
+        if source == self.listFileAdded and event.type() in (QEvent.Type.DragEnter, QEvent.Type.Drop):
+            if event.mimeData().hasUrls():
+                if event.type() == QEvent.Type.DragEnter:
                     event.acceptProposedAction()
-                    return True
-            elif event.type() == QEvent.Type.Drop:
-                if event.mimeData().hasUrls():
+                else:
                     files = [url.toLocalFile() for url in event.mimeData().urls()]
                     self.add_files(files)
                     event.acceptProposedAction()
-                    return True
+                return True
+
+        # Internal move for listFileAdded
+        elif source == self.listFileAdded.viewport() and event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+            # Internal move logic is handled by the helper function
+            if self.perform_manual_move(self.listFileAdded, self.file_list_model, event):
+                return True
+            else:
+                return False
 
         # Drag start from listSheetInFile
         if source == self.listSheetInFile.viewport():
@@ -461,70 +549,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.handle_sheet_drop(event)
                 return True # We handled it
             else:
-                # --- Internal move: Log everything for debugging ---
-                log_msg = f"--- D&D Debug ---\n"
-                log_msg += f"Event: {event.type()}\n"
-                log_msg += f"Pos: {event.pos()}\n"
-                indicator_pos = self.listSheetToMerge.dropIndicatorPosition()
-                index_at_pos = self.listSheetToMerge.indexAt(event.pos())
-                log_msg += f"Indicator: {indicator_pos}\n"
-                log_msg += f"Index @ Pos: {index_at_pos.row()}\n"
-                selected_rows = [index.row() for index in self.listSheetToMerge.selectedIndexes()]
-                log_msg += f"Selected: {selected_rows}"
-                self.txtLogOutput.append(log_msg)
-
-                if event.type() == QEvent.Type.Drop:
-                    self.txtLogOutput.append("-> Drop detected. Applying manual move.")
-                    # Get destination row, accounting for dropping in empty space
-                    dest_index = self.listSheetToMerge.indexAt(event.pos())
-                    dest_row = dest_index.row()
-
-                    # Adjust destination based on drop indicator
-                    if self.listSheetToMerge.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.BelowItem:
-                        dest_row += 1
-
-                    if dest_row == -1:
-                        dest_row = self.merge_list_model.rowCount()
-
-                    # Get data and original rows of items being moved
-                    source_indexes = self.listSheetToMerge.selectedIndexes()
-                    source_rows = sorted([index.row() for index in source_indexes])
-                    source_data = [self.merge_list_model.stringList()[row] for row in source_rows]
-
-                    self.txtLogOutput.append(f"-> Source Rows: {source_rows} | Source Data: {source_data}")
-                    self.txtLogOutput.append(f"-> Initial Dest Row: {dest_row}")
-
-                    # --- Perform the move manually on a copy of the list ---
-                    data_list = self.merge_list_model.stringList()
-                    
-                    # Step 1: Pull the items out from bottom to top
-                    for row in reversed(source_rows):
-                        data_list.pop(row)
-
-                    # Step 2: Adjust the destination index based on what was removed
-                    offset = 0
-                    for row in source_rows:
-                        if row < dest_row:
-                            offset += 1
-                    dest_row -= offset
-                    self.txtLogOutput.append(f"-> Adjusted Dest Row: {dest_row}")
-
-                    # Step 3: Insert the items at the new destination
-                    for item in source_data:
-                        data_list.insert(dest_row, item)
-                        dest_row += 1
-                    
-                    # Update the model with the manually re-ordered list
-                    self.merge_list_model.setStringList(data_list)
-                    self.txtLogOutput.append("-> Manual move complete.")
-                    
-                    # Mark event as handled
-                    event.accept()
+                # Internal move for listSheetToMerge
+                if self.perform_manual_move(self.listSheetToMerge, self.merge_list_model, event):
                     return True
-
-                # For other drag events (Move, Enter), let them be handled to show drop indicator
-                event.setDropAction(Qt.DropAction.MoveAction)
-                return False
+                else:
+                    return False
 
         # Key presses
         elif event.type() == QEvent.Type.KeyPress:
@@ -779,22 +808,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def handle_encrypted_file(self, file_path):
         if self.stop_asking_for_passwords:
             self.txtLogOutput.append(f"비밀번호 입력을 중단하여 파일을 건너뜁니다: {os.path.basename(file_path)}")
-            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (stopped asking).") # ADD LOG
+            if self.debug_mode:
+                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (stopped asking).") # ADD LOG
             return None
 
         self.txtLogOutput.append(f"암호화된 파일 감지: {os.path.basename(file_path)}")
         password = None
-        decrypted_file_buffer = None # Initialize to None
+        decrypted_file_buffer = None
         basename = os.path.basename(file_path)
         temp_decrypted_path = None
 
         # Password check order: 1. File-specific, 2. Global, 3. User prompt
-
-        # 1. Try file-specific password
         if basename in self.file_passwords:
             try:
                 self.txtLogOutput.append(f'{basename}에 대해 기억된 비밀번호로 열기 시도...')
-                decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
+                decrypted_file_buffer = io.BytesIO()
                 with open(file_path, 'rb') as f:
                     office_file = msoffcrypto.OfficeFile(f)
                     office_file.load_key(password=self.file_passwords[basename])
@@ -803,78 +831,81 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.txtLogOutput.append("기억된 비밀번호로 열기 성공.")
             except Exception:
                 self.txtLogOutput.append("기억된 비밀번호 실패.")
-                decrypted_file_buffer = None # Indicate failure to get decrypted content
+                decrypted_file_buffer = None
 
-        # 2. Try global password
         if not password and self.use_global_password and self.global_password:
             try:
                 self.txtLogOutput.append("전역 비밀번호로 열기 시도...")
-                decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
+                decrypted_file_buffer = io.BytesIO()
                 with open(file_path, 'rb') as f:
                     office_file = msoffcrypto.OfficeFile(f)
                     office_file.load_key(password=self.global_password)
                     office_file.decrypt(decrypted_file_buffer)
                 password = self.global_password
-                self.file_passwords[basename] = self.global_password # Store password for the file
+                self.file_passwords[basename] = self.global_password
                 self.txtLogOutput.append("전역 비밀번호로 열기 성공.")
             except Exception as e:
                 self.txtLogOutput.append(f"전역 비밀번호 실패: {e}")
-                decrypted_file_buffer = None # Indicate failure to get decrypted content
+                decrypted_file_buffer = None
 
-        # 3. If all else fails, ask user
-        if not password: # This condition is key. If password is set by file-specific or global, this block is skipped.
-            self.txtLogOutput.append(f"DEBUG: Showing PasswordDialog for {basename}.") # ADD LOG
+        if not password:
+            if self.debug_mode:
+                self.txtLogOutput.append(f"DEBUG: Showing PasswordDialog for {basename}.")
             dialog = PasswordDialog(basename, self)
             result = dialog.exec()
 
             if dialog.stopped:
                 self.stop_asking_for_passwords = True
                 self.txtLogOutput.append("사용자가 중단하여 이후 암호 입력을 건너뜁니다.")
-                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog stopped).") # ADD LOG
+                if self.debug_mode:
+                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog stopped).")
                 return None
 
-            if result: # User clicked OK
+            if result:
                 user_password = dialog.lineEditKeepPassword.text()
                 if user_password:
                     try:
                         self.txtLogOutput.append("사용자 입력 비밀번호로 열기 시도...")
-                        decrypted_file_buffer = io.BytesIO() # Fresh buffer for this attempt
+                        decrypted_file_buffer = io.BytesIO()
                         with open(file_path, 'rb') as f:
                             office_file = msoffcrypto.OfficeFile(f)
                             office_file.load_key(password=user_password)
                             office_file.decrypt(decrypted_file_buffer)
-                        password = user_password # Password is now set
+                        password = user_password
                         self.txtLogOutput.append("사용자 입력 비밀번호로 열기 성공.")
-                        # Remember password for this file
                         self.file_passwords[basename] = user_password
                         if dialog.chkKeepPassword.isChecked():
                             self.global_password = user_password
-                            self.use_global_password = True # Enable using the global password
+                            self.use_global_password = True
                     except Exception as e:
                         self.txtLogOutput.append(f"사용자 입력 비밀번호 실패: {e}")
-                        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (user password failed).") # ADD LOG
-                        return None # Decryption failed with user password
+                        if self.debug_mode:
+                            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (user password failed).")
+                        return None
                 else:
                     self.txtLogOutput.append("비밀번호가 입력되지 않아 파일을 건너뜁니다.")
-                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (empty user password).") # ADD LOG
-                    return None # User didn't enter password
-            else: # User cancelled the dialog
+                    if self.debug_mode:
+                        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (empty user password).")
+                    return None
+            else:
                 self.txtLogOutput.append("사용자가 취소하여 파일을 건너뜁니다.")
-                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog cancelled).") # ADD LOG
+                if self.debug_mode:
+                    self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (dialog cancelled).")
                 return None
 
-        # If we have a password (meaning decryption was successful at some point)
-        if password and decrypted_file_buffer: # Check if buffer is not None
+        if password and decrypted_file_buffer:
             fd, temp_decrypted_path = tempfile.mkstemp(suffix=os.path.splitext(file_path)[1], prefix='decrypted_')
             os.close(fd)
             with open(temp_decrypted_path, 'wb') as tmp_f:
                 tmp_f.write(decrypted_file_buffer.getbuffer())
             self.temp_files.append(temp_decrypted_path)
-            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning decrypted path: {temp_decrypted_path}") # ADD LOG
+            if self.debug_mode:
+                self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning decrypted path: {temp_decrypted_path}")
             return temp_decrypted_path
         
-        self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (no password worked).") # ADD LOG
-        return None # Should only be reached if no password worked or user cancelled
+        if self.debug_mode:
+            self.txtLogOutput.append(f"DEBUG: handle_encrypted_file returning None (no password worked).")
+        return None
 
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
@@ -898,7 +929,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.progressBar.setValue(0)
         self.txtLogOutput.clear()
-        self.txtLogOutput.append(f"DEBUG: file_passwords at start of merge: {self.file_passwords}")
+        if self.debug_mode:
+            self.txtLogOutput.append(f"DEBUG: file_passwords at start of merge: {self.file_passwords}")
 
         try:
             merge_type = self.options.get('merge_type', 'Sheet')
@@ -992,12 +1024,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 
                 processed_path = os.path.abspath(info['processed_path'])
                 
-                # Retrieve password for the file
-                password = self.file_passwords.get(file_name)
-
                 try:
                     if password:
-                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
+                        if self.debug_mode:
+                            self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
                     else:
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
@@ -1027,7 +1057,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             # If only_value_copy is enabled, convert all formulas to values in the merged workbook
             if self.options['only_value_copy']:
-                self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
+                if self.debug_mode:
+                    self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
                 for ws in merged_workbook.Worksheets:
                     # Get the used range of the worksheet
                     used_range = ws.UsedRange
@@ -1146,7 +1177,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
                 try:
                     if password:
-                        self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
+                        if self.debug_mode:
+                            self.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
                     else:
                         source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
@@ -1240,7 +1272,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             QApplication.processEvents()
 
         if self.options['only_value_copy']:
-            self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중 (openpyxl)...")
+            if self.debug_mode:
+                self.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중 (openpyxl)...")
             for sheet in output_workbook.worksheets:
                 for row in sheet.iter_rows():
                     for cell in row:
