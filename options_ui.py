@@ -116,11 +116,11 @@ class Ui_Dialog(object):
 
         self.horizontalLayout_2.addWidget(self.label_3)
 
-        self.checkBoxEmptyrow = QCheckBox(self.layoutWidget1)
-        self.checkBoxEmptyrow.setObjectName(u"checkBoxEmptyrow")
-        self.checkBoxEmptyrow.setFont(font)
+        self.checkBoxEmptyRow = QCheckBox(self.layoutWidget1)
+        self.checkBoxEmptyRow.setObjectName(u"checkBoxEmptyRow")
+        self.checkBoxEmptyRow.setFont(font)
 
-        self.horizontalLayout_2.addWidget(self.checkBoxEmptyrow)
+        self.horizontalLayout_2.addWidget(self.checkBoxEmptyRow)
 
         self.label = QLabel(self.layoutWidget1)
         self.label.setObjectName(u"label")
@@ -201,7 +201,7 @@ class Ui_Dialog(object):
         self.radioButtonHorizontal.setText(QCoreApplication.translate("Dialog", u"\uac00\ub85c", None))
         self.groupBox_3.setTitle(QCoreApplication.translate("Dialog", u"\ub370\uc774\ud130 \uc815\ub9ac", None))
         self.label_3.setText(QCoreApplication.translate("Dialog", u"\uc904 \uc774\uc0c1 \ube48", None))
-        self.checkBoxEmptyrow.setText(QCoreApplication.translate("Dialog", u"\ud589", None))
+        self.checkBoxEmptyRow.setText(QCoreApplication.translate("Dialog", u"\ud589", None))
         self.label.setText(QCoreApplication.translate("Dialog", u"\ub610\ub294", None))
         self.checkBoxEmptyColumn.setText(QCoreApplication.translate("Dialog", u"\uc5f4", None))
         self.label_2.setText(QCoreApplication.translate("Dialog", u"\uc81c\uac70", None))
