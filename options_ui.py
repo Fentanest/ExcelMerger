@@ -30,7 +30,7 @@ class Ui_Dialog(object):
         font.setPointSize(9)
         Dialog.setFont(font)
         icon = QIcon()
-        icon.addFile(u"../logo.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addFile(u"lib/logo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         Dialog.setWindowIcon(icon)
         Dialog.setStyleSheet(u"* {\n"
 "font-family: \"Noto Sans\";\n"
@@ -181,7 +181,7 @@ class Ui_Dialog(object):
     # setupUi
 
     def retranslateUi(self, Dialog):
-        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
+        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Options", None))
         self.groupBox.setTitle(QCoreApplication.translate("Dialog", u"\ubcd1\ud569 \ubc29\uc2dd", None))
         self.radioButtonSheet.setText(QCoreApplication.translate("Dialog", u"\uc2dc\ud2b8", None))
 #if QT_CONFIG(shortcut)
@@ -203,9 +203,6 @@ class Ui_Dialog(object):
 #endif // QT_CONFIG(shortcut)
         self.label.setText(QCoreApplication.translate("Dialog", u"\ub610\ub294", None))
         self.checkBoxEmptyColumn.setText(QCoreApplication.translate("Dialog", u"\uc5f4", None))
-#if QT_CONFIG(shortcut)
-        self.checkBoxEmptyColumn.setShortcut(QCoreApplication.translate("Dialog", u"X", None))
-#endif // QT_CONFIG(shortcut)
         self.label_2.setText(QCoreApplication.translate("Dialog", u"\uc81c\uac70", None))
         self.groupBox_4.setTitle(QCoreApplication.translate("Dialog", u"\uc2dc\ud2b8 \uc774\ub984 \uaddc\uce59", None))
         self.radioButtonOriginalBoth.setText(QCoreApplication.translate("Dialog", u"\uc6d0\ubcf8\ud30c\uc77c\uba85_\uc6d0\ubcf8\uc2dc\ud2b8\uba85", None))

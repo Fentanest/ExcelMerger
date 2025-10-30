@@ -30,7 +30,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
-        self.setWindowTitle("Excel Merger")
+        # self.setWindowTitle("Excel Merger")
 
         # Settings Manager
         self.settings_manager = SettingsManager()

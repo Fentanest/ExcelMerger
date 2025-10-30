@@ -29,7 +29,7 @@ class Ui_Dialog(object):
         font.setPointSize(9)
         Dialog.setFont(font)
         icon = QIcon()
-        icon.addFile(u"../logo.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addFile(u"lib/logo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         Dialog.setWindowIcon(icon)
         Dialog.setStyleSheet(u"* {\n"
 "font-family: \"Noto Sans\";\n"
@@ -94,7 +94,7 @@ class Ui_Dialog(object):
     # setupUi
 
     def retranslateUi(self, Dialog):
-        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
+        Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Password", None))
         self.chkKeepPassword.setText(QCoreApplication.translate("Dialog", u"\uc785\ub825\ud55c \uc554\ud638\ub97c \uacc4\uc18d \uc0ac\uc6a9", None))
         self.label.setText(QCoreApplication.translate("Dialog", u"File to open:", None))
         self.btnStop.setText(QCoreApplication.translate("Dialog", u"\uc791\uc5c5 \uc911\ub2e8", None))

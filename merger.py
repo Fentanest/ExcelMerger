@@ -12,6 +12,9 @@ class Merger:
         output_workbook = openpyxl.Workbook()
         output_workbook.remove(output_workbook.active) # Remove default sheet
 
+        if self.main_window.options['only_value_copy']:
+            self.main_window.txtLogOutput.append("수식을 값으로 변환하며 병합을 시작합니다...")
+
         total_sheets = len(sheets_to_merge)
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
@@ -62,9 +65,6 @@ class Merger:
             self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
             QApplication.processEvents()
 
-        if self.main_window.options['only_value_copy']:
-            self.main_window.txtLogOutput.append("수식을 값으로 변환하여 병합했습니다.")
-
         self.perform_sheet_trim(output_workbook)
 
         output_workbook.save(save_path)
@@ -73,6 +73,9 @@ class Merger:
         output_workbook = openpyxl.Workbook()
         output_sheet = output_workbook.active
         output_sheet.title = "Merged_Sheet"
+
+        if self.main_window.options['only_value_copy']:
+            self.main_window.txtLogOutput.append("수식을 값으로 변환하며 병합을 시작합니다...")
 
         total_sheets = len(sheets_to_merge)
         last_pos = 0
@@ -108,9 +111,6 @@ class Merger:
 
             self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
             QApplication.processEvents()
-
-        if self.main_window.options['only_value_copy']:
-            self.main_window.txtLogOutput.append("수식을 값으로 변환하여 병합했습니다.")
 
         self.perform_sheet_trim(output_workbook)
 

@@ -34,7 +34,7 @@ class Ui_MainWindow(object):
         font.setBold(False)
         MainWindow.setFont(font)
         icon = QIcon()
-        icon.addFile(u"../logo.ico", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addFile(u"lib/logo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         MainWindow.setWindowIcon(icon)
         MainWindow.setAutoFillBackground(True)
         MainWindow.setStyleSheet(u"* {\n"
@@ -262,7 +262,7 @@ class Ui_MainWindow(object):
     # setupUi
 
     def retranslateUi(self, MainWindow):
-        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"MainWindow", None))
+        MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"Excel Merger", None))
         self.actionAddExcelFile.setText(QCoreApplication.translate("MainWindow", u"\uc5d1\uc140\ud30c\uc77c \ucd94\uac00", None))
 #if QT_CONFIG(shortcut)
         self.actionAddExcelFile.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+O", None))

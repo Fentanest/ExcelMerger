@@ -105,8 +105,7 @@ class MergerWin32:
 
             # If only_value_copy is enabled, convert all formulas to values in the merged workbook
             if self.main_window.options['only_value_copy']:
-                if self.main_window.debug_mode:
-                    self.main_window.txtLogOutput.append("DEBUG: 병합된 시트의 수식을 값으로 변환 중...")
+                self.main_window.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
                 for ws in merged_workbook.Worksheets:
                     # Get the used range of the worksheet
                     used_range = ws.UsedRange
