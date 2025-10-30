@@ -392,6 +392,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         event.acceptProposedAction()
 
     def add_files(self, files):
+        self.stop_asking_for_passwords = False
         for file in files:
             basename = os.path.basename(file)
             if basename in self.file_info: # Skip duplicates

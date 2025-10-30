@@ -24,6 +24,9 @@ class Merger:
                 self.main_window.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
                 continue
 
+            if self.main_window.debug_mode and file_name in self.main_window.file_passwords:
+                self.main_window.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 복호화된 임시파일 열기 시도...")
+
             try:
                 source_workbook = self.main_window.file_handler._open_workbook(file_path, file_name, data_only=self.main_window.options['only_value_copy']) # Pass data_only flag
                 if not source_workbook:
@@ -88,6 +91,9 @@ class Merger:
             if not file_path:
                 self.main_window.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
                 continue
+
+            if self.main_window.debug_mode and file_name in self.main_window.file_passwords:
+                self.main_window.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 복호화된 임시파일 열기 시도...")
 
             try:
                 source_workbook = self.main_window.file_handler._open_workbook(file_path, file_name, data_only=self.main_window.options['only_value_copy'])

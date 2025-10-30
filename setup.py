@@ -23,7 +23,7 @@ setup(
         Executable(
             "main.py",
             base=base,
-            target_name="ExcelMerger.exe",  # 생성될 exe 파일명 지정
+            target_name="ExcelMerger",  # 생성될 exe 파일명 지정
             icon="lib/logo.ico"             # ico 파일 경로 지정 (png 아님)
         )
     ],
