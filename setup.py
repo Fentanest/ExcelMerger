@@ -16,8 +16,8 @@ if sys.platform == "win32":
 
 setup(
     name="ExcelMerger",
-    version="1.0",
-    description="Excel File Merger",
+    version="1.1",
+    description="Excel File Merger by Fentanest",
     options={"build_exe": build_exe_options},
     executables=[
         Executable(
