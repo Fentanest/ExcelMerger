@@ -153,12 +153,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.listSheetInFile.setDragEnabled(True)
         self.listSheetInFile.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
 
-        self.listSheetToMerge.setAcceptDrops(True)
-        self.listSheetToMerge.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
-        self.listSheetToMerge.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.listSheetToMerge.setDefaultDropAction(Qt.DropAction.MoveAction)
 
-        self.listSheetToMerge.setDragDropOverwriteMode(False)
+
+
         self.listFileAdded.setDragDropOverwriteMode(False)
 
         # Connect signals to slots
@@ -194,6 +191,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # Install event filter for key presses
         self.listFileAdded.installEventFilter(self)
         self.listSheetToMerge.installEventFilter(self)
+        self.listSheetToMerge.viewport().installEventFilter(self)
         self.listSheetInFile.viewport().installEventFilter(self)
         self.listSheetInFile.installEventFilter(self)
         
@@ -453,8 +451,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 if (event.pos() - self.drag_start_position).manhattanLength() > QApplication.startDragDistance():
                     self.perform_drag_sheet_in_file()
         
-        # Drag/Drop on listSheetToMerge
-        elif source == self.listSheetToMerge and event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+        # Drag/Drop on listSheetToMerge's viewport
+        elif source == self.listSheetToMerge.viewport() and event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
             if event.mimeData().hasFormat("application/x-sheet-data"):
                 # External drop from listSheetInFile
                 if event.type() != QEvent.Type.Drop:
@@ -463,9 +461,70 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     self.handle_sheet_drop(event)
                 return True # We handled it
             else:
-                # Internal move
+                # --- Internal move: Log everything for debugging ---
+                log_msg = f"--- D&D Debug ---\n"
+                log_msg += f"Event: {event.type()}\n"
+                log_msg += f"Pos: {event.pos()}\n"
+                indicator_pos = self.listSheetToMerge.dropIndicatorPosition()
+                index_at_pos = self.listSheetToMerge.indexAt(event.pos())
+                log_msg += f"Indicator: {indicator_pos}\n"
+                log_msg += f"Index @ Pos: {index_at_pos.row()}\n"
+                selected_rows = [index.row() for index in self.listSheetToMerge.selectedIndexes()]
+                log_msg += f"Selected: {selected_rows}"
+                self.txtLogOutput.append(log_msg)
+
+                if event.type() == QEvent.Type.Drop:
+                    self.txtLogOutput.append("-> Drop detected. Applying manual move.")
+                    # Get destination row, accounting for dropping in empty space
+                    dest_index = self.listSheetToMerge.indexAt(event.pos())
+                    dest_row = dest_index.row()
+
+                    # Adjust destination based on drop indicator
+                    if self.listSheetToMerge.dropIndicatorPosition() == QAbstractItemView.DropIndicatorPosition.BelowItem:
+                        dest_row += 1
+
+                    if dest_row == -1:
+                        dest_row = self.merge_list_model.rowCount()
+
+                    # Get data and original rows of items being moved
+                    source_indexes = self.listSheetToMerge.selectedIndexes()
+                    source_rows = sorted([index.row() for index in source_indexes])
+                    source_data = [self.merge_list_model.stringList()[row] for row in source_rows]
+
+                    self.txtLogOutput.append(f"-> Source Rows: {source_rows} | Source Data: {source_data}")
+                    self.txtLogOutput.append(f"-> Initial Dest Row: {dest_row}")
+
+                    # --- Perform the move manually on a copy of the list ---
+                    data_list = self.merge_list_model.stringList()
+                    
+                    # Step 1: Pull the items out from bottom to top
+                    for row in reversed(source_rows):
+                        data_list.pop(row)
+
+                    # Step 2: Adjust the destination index based on what was removed
+                    offset = 0
+                    for row in source_rows:
+                        if row < dest_row:
+                            offset += 1
+                    dest_row -= offset
+                    self.txtLogOutput.append(f"-> Adjusted Dest Row: {dest_row}")
+
+                    # Step 3: Insert the items at the new destination
+                    for item in source_data:
+                        data_list.insert(dest_row, item)
+                        dest_row += 1
+                    
+                    # Update the model with the manually re-ordered list
+                    self.merge_list_model.setStringList(data_list)
+                    self.txtLogOutput.append("-> Manual move complete.")
+                    
+                    # Mark event as handled
+                    event.accept()
+                    return True
+
+                # For other drag events (Move, Enter), let them be handled to show drop indicator
                 event.setDropAction(Qt.DropAction.MoveAction)
-                return False # Let the widget handle it with the forced action
+                return False
 
         # Key presses
         elif event.type() == QEvent.Type.KeyPress:
