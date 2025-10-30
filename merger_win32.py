@@ -130,7 +130,7 @@ class MergerWin32:
                 excel.DisplayAlerts = True
                 excel.Application.Quit()
 
-    def merge_horizontally_win32(self, sheets_to_merge, save_path):
+    def _merge_by_axis_win32(self, sheets_to_merge, save_path, axis):
         excel = None
         try:
             excel = self.win32.gencache.EnsureDispatch('Excel.Application')
@@ -141,7 +141,7 @@ class MergerWin32:
             output_sheet.Name = "Merged_Sheet"
 
             total_sheets = len(sheets_to_merge)
-            last_col = 0
+            last_pos = 0
             for i, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split('/', 1)
                 self.main_window.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
@@ -167,13 +167,19 @@ class MergerWin32:
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
                     source_range = source_sheet.UsedRange
-                    if source_range.Columns.Count > 0:
-                        source_range.Copy()
-                        
-                        destination_range = output_sheet.Cells(1, last_col + 1)
-                        output_sheet.Paste(Destination=destination_range)
-                        
-                        last_col += source_range.Columns.Count
+
+                    if axis == 'horizontal':
+                        if source_range.Columns.Count > 0:
+                            source_range.Copy()
+                            destination_range = output_sheet.Cells(1, last_pos + 1)
+                            output_sheet.Paste(Destination=destination_range)
+                            last_pos += source_range.Columns.Count
+                    else: # vertical
+                        if source_range.Rows.Count > 0:
+                            source_range.Copy()
+                            destination_range = output_sheet.Cells(last_pos + 1, 1)
+                            output_sheet.Paste(Destination=destination_range)
+                            last_pos += source_range.Rows.Count
                     
                     source_workbook.Close(SaveChanges=False)
                     time.sleep(0.1)
@@ -201,78 +207,12 @@ class MergerWin32:
             if excel:
                 excel.DisplayAlerts = True
                 excel.Application.Quit()
+
+    def merge_horizontally_win32(self, sheets_to_merge, save_path):
+        self._merge_by_axis_win32(sheets_to_merge, save_path, 'horizontal')
 
     def merge_vertically_win32(self, sheets_to_merge, save_path):
-        excel = None
-        try:
-            excel = self.win32.gencache.EnsureDispatch('Excel.Application')
-            excel.Visible = False
-            excel.DisplayAlerts = False
-            output_workbook = excel.Workbooks.Add()
-            output_sheet = output_workbook.Worksheets(1)
-            output_sheet.Name = "Merged_Sheet"
-
-            total_sheets = len(sheets_to_merge)
-            last_row = 0
-            for i, item in enumerate(sheets_to_merge):
-                file_name, sheet_name = item.split('/', 1)
-                self.main_window.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
-
-                info = self.main_window.file_info.get(file_name)
-                if not info:
-                    self.main_window.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
-                    continue
-                
-                processed_path = os.path.abspath(info['processed_path'])
-                
-                password = self.main_window.file_passwords.get(file_name)
-
-                try:
-                    if password:
-                        if self.main_window.debug_mode:
-                            self.main_window.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0, Password=password)
-                    else:
-                        source_workbook = excel.Workbooks.Open(processed_path, UpdateLinks=0)
-                    
-                    source_sheet = source_workbook.Worksheets(sheet_name)
-                    
-                    source_range = source_sheet.UsedRange
-                    if source_range.Rows.Count > 0:
-                        source_range.Copy()
-                        
-                        destination_range = output_sheet.Cells(last_row + 1, 1)
-                        output_sheet.Paste(Destination=destination_range)
-                        
-                        last_row += source_range.Rows.Count
-                    
-                    source_workbook.Close(SaveChanges=False)
-                    time.sleep(0.1)
-                except Exception as e:
-                    self.main_window.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
-                
-                self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
-
-            if self.main_window.options['only_value_copy']:
-                self.main_window.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
-                used_range = output_sheet.UsedRange
-                used_range.Copy()
-                used_range.PasteSpecial(Paste=self.win32.constants.xlPasteValues)
-                excel.CutCopyMode = False
-
-            self.perform_sheet_trim_win32(output_workbook, excel)
-
-            output_workbook.SaveAs(os.path.abspath(save_path))
-            output_workbook.Close(SaveChanges=False)
-
-        except Exception as e:
-            self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
-        finally:
-            if excel:
-                excel.DisplayAlerts = True
-                excel.Application.Quit()
+        self._merge_by_axis_win32(sheets_to_merge, save_path, 'vertical')
 
     def perform_sheet_trim_win32(self, workbook, excel_app):
         sheet_trim_value = self.main_window.options.get('sheet_trim_value', 0)

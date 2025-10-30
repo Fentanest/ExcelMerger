@@ -69,13 +69,13 @@ class Merger:
 
         output_workbook.save(save_path)
 
-    def merge_horizontally(self, sheets_to_merge, save_path):
+    def _merge_by_axis(self, sheets_to_merge, save_path, axis):
         output_workbook = openpyxl.Workbook()
         output_sheet = output_workbook.active
         output_sheet.title = "Merged_Sheet"
 
         total_sheets = len(sheets_to_merge)
-        last_col = 0
+        last_pos = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
             self.main_window.lblCurrentFile.setText(f'{item} 병합 중...')
@@ -96,8 +96,12 @@ class Merger:
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
                 
-                self.copy_sheet_data(source_sheet, output_sheet, start_col=last_col + 1, file_name=file_name)
-                last_col = output_sheet.max_column
+                if axis == 'horizontal':
+                    self.copy_sheet_data(source_sheet, output_sheet, start_col=last_pos + 1, file_name=file_name)
+                    last_pos = output_sheet.max_column
+                else: # vertical
+                    self.copy_sheet_data(source_sheet, output_sheet, start_row=last_pos + 1, file_name=file_name)
+                    last_pos = output_sheet.max_row
 
             except Exception as e:
                 self.main_window.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
@@ -111,49 +115,12 @@ class Merger:
         self.perform_sheet_trim(output_workbook)
 
         output_workbook.save(save_path)
+
+    def merge_horizontally(self, sheets_to_merge, save_path):
+        self._merge_by_axis(sheets_to_merge, save_path, 'horizontal')
 
     def merge_vertically(self, sheets_to_merge, save_path):
-        output_workbook = openpyxl.Workbook()
-        output_sheet = output_workbook.active
-        output_sheet.title = "Merged_Sheet"
-
-        total_sheets = len(sheets_to_merge)
-        last_row = 0
-        for i, item in enumerate(sheets_to_merge):
-            file_name, sheet_name = item.split('/', 1)
-            self.main_window.lblCurrentFile.setText(f'{item} 병합 중...')
-
-            file_path = self.main_window.file_info.get(file_name, {}).get('processed_path')
-
-            if not file_path:
-                self.main_window.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
-                continue
-
-            try:
-                source_workbook = self.main_window.file_handler._open_workbook(file_path, file_name, data_only=self.main_window.options['only_value_copy']) # Pass data_only flag
-                if not source_workbook:
-                    continue
-
-                if file_path.endswith('.xlsx'):
-                    source_sheet = source_workbook[sheet_name]
-                else: # .xls
-                    source_sheet = source_workbook.sheet_by_name(sheet_name)
-
-                self.copy_sheet_data(source_sheet, output_sheet, start_row=last_row + 1, file_name=file_name)
-                last_row = output_sheet.max_row
-
-            except Exception as e:
-                self.main_window.txtLogOutput.append(f"시트 병합 오류 {item}: {e}")
-
-            self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
-
-        if self.main_window.options['only_value_copy']:
-            self.main_window.txtLogOutput.append("수식을 값으로 변환하여 병합했습니다.")
-
-        self.perform_sheet_trim(output_workbook)
-
-        output_workbook.save(save_path)
+        self._merge_by_axis(sheets_to_merge, save_path, 'vertical')
 
     def copy_sheet_data(self, source_sheet, output_sheet, start_row=1, start_col=1, file_name=""):
         if isinstance(source_sheet, openpyxl.worksheet.worksheet.Worksheet):
