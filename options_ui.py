@@ -154,30 +154,14 @@ class Ui_Dialog(object):
         self.radioButtonOriginalBoth = QRadioButton(self.layoutWidget_3)
         self.radioButtonOriginalBoth.setObjectName(u"radioButtonOriginalBoth")
         self.radioButtonOriginalBoth.setFont(font)
-        self.radioButtonOriginalBoth.setStyleSheet(u"QRadioButton::indicator:checked {\n"
-"    background-color:       black;\n"
-"    border:                 2px solid white;\n"
-"}\n"
-"\n"
-"QRadioButton::indicator:unchecked {\n"
-"    background-color:       gray;\n"
-"    border:                 2px solid white;\n"
-"}")
+        self.radioButtonOriginalBoth.setStyleSheet(u"")
 
         self.verticalLayout.addWidget(self.radioButtonOriginalBoth)
 
         self.radioButtonOriginalSheet = QRadioButton(self.layoutWidget_3)
         self.radioButtonOriginalSheet.setObjectName(u"radioButtonOriginalSheet")
         self.radioButtonOriginalSheet.setFont(font)
-        self.radioButtonOriginalSheet.setStyleSheet(u"QRadioButton::indicator:checked {\n"
-"    background-color:       black;\n"
-"    border:                 2px solid white;\n"
-"}\n"
-"\n"
-"QRadioButton::indicator:unchecked {\n"
-"    background-color:       gray;\n"
-"    border:                 2px solid white;\n"
-"}")
+        self.radioButtonOriginalSheet.setStyleSheet(u"")
 
         self.verticalLayout.addWidget(self.radioButtonOriginalSheet)
 
