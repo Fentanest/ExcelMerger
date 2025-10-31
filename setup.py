@@ -4,47 +4,60 @@ import shutil
 from cx_Freeze import setup, Executable
 from cx_Freeze.command.build_exe import build_exe as _build_exe
 
-# Define the version
+# --- Configuration ---
 version = "1.1"
-
-# Determine OS for build directory name
 os_name = "Win" if sys.platform == "win32" else "Mac" if sys.platform == "darwin" else "Linux"
-build_dir = f"ExcelMerger v{version}-{os_name}"
+custom_dir_name = f"ExcelMerger v{version}-{os_name}"
 
-# Custom build class to include zipping
+# --- Custom Build Class ---
 class build_exe(_build_exe):
     def run(self):
-        super().run()  # Run the original build process
+        # Run the original build process. This will create the default folder.
+        super().run()
 
-        # After the build is complete, create a zip archive
+        # After the build, self.build_exe points to the default build folder 
+        # (e.g., build/exe.linux-x86_64-3.13)
+        default_build_path = self.build_exe
+        build_root = os.path.dirname(default_build_path)
+        custom_build_path = os.path.join(build_root, custom_dir_name)
+
+        # Rename the default build folder to our custom name
+        print("--- RENAMING BUILD FOLDER ---")
+        if os.path.exists(custom_build_path):
+            shutil.rmtree(custom_build_path) # Remove old custom folder if it exists
+        print(f"Renaming '{os.path.basename(default_build_path)}' to '{custom_dir_name}'")
+        os.rename(default_build_path, custom_build_path)
+        print("-----------------------------")
+
+        # Create a zip archive of the renamed folder
         archive_dir = "dist"
         os.makedirs(archive_dir, exist_ok=True)
-
         archive_base_name = os.path.join(archive_dir, f"ExcelMerger-{version}-{os_name}")
         
-        root_dir = os.path.dirname(self.build_exe)
-        base_dir = os.path.basename(self.build_exe)
-
         print("--- ZIP CREATION ---")
-        print(f"Build complete. Now creating zip archive...")
-        shutil.make_archive(archive_base_name, 'zip', root_dir, base_dir)
+        shutil.make_archive(
+            base_name=archive_base_name,
+            format='zip',
+            root_dir=build_root,
+            base_dir=custom_dir_name
+        )
         print(f"Successfully created archive: {archive_base_name}.zip")
-        print("--------------------")
+        print("---------------------")
 
-# Dependencies are automatically detected, but it might need fine tuning.
+# --- Setup Options ---
+# Note: We do not set build_dir here anymore
 build_exe_options = {
     "packages": ["os", "sys", "re", "openpyxl", "xlrd", "msoffcrypto", "cffi", "cryptography"],
     "includes": ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"],
     "include_files": [("lib/logo.png", "lib/logo.png"), ("lib/logo.ico", "lib/logo.ico")],
-    "excludes": [],
-    "build_dir": build_dir
+    "excludes": []
 }
 
-# base="Win32GUI" should be used on Windows for a GUI application
 base = None
 if sys.platform == "win32":
     base = "Win32GUI"
 
+# --- Main Setup Call ---
 setup(
     name="ExcelMerger",
     version=version,
