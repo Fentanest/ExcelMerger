@@ -5,7 +5,7 @@ from cx_Freeze import setup, Executable
 from cx_Freeze.command.build_exe import build_exe as _build_exe
 
 # --- Configuration ---
-version = "1.11"
+version = "1.12"
 os_name = "Win" if sys.platform == "win32" else "Mac" if sys.platform == "darwin" else "Linux"
 custom_dir_name = f"ExcelMerger v{version}-{os_name}"
 
