@@ -14,7 +14,7 @@ class MergerWin32:
             return None
         excel = None # Initialize excel to None
         try:
-            excel = self.win32.gencache.EnsureDispatch('Excel.Application')
+            excel = self.win32.Dispatch('Excel.Application')
             excel.Visible = False # Keep it hidden
             
             file_name = os.path.basename(xls_path)
@@ -48,7 +48,7 @@ class MergerWin32:
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
         try:
-            excel = self.win32.gencache.EnsureDispatch('Excel.Application')
+            excel = self.win32.Dispatch('Excel.Application')
             excel.Visible = False
             excel.DisplayAlerts = False
             merged_workbook = excel.Workbooks.Add()
@@ -147,7 +147,7 @@ class MergerWin32:
                     # Copy the used range
                     used_range.Copy()
                     # Paste special values to the same range
-                    used_range.PasteSpecial(Paste=self.win32.constants.xlPasteValues)
+                    used_range.PasteSpecial(Paste=-4163)
                     # Clear the clipboard
                     excel.CutCopyMode = False
 
@@ -167,7 +167,7 @@ class MergerWin32:
     def _merge_by_axis_win32(self, sheets_to_merge, save_path, axis):
         excel = None
         try:
-            excel = self.win32.gencache.EnsureDispatch('Excel.Application')
+            excel = self.win32.Dispatch('Excel.Application')
             excel.Visible = False
             excel.DisplayAlerts = False
             output_workbook = excel.Workbooks.Add()
@@ -227,7 +227,7 @@ class MergerWin32:
                 self.main_window.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
                 used_range = output_sheet.UsedRange
                 used_range.Copy()
-                used_range.PasteSpecial(Paste=self.win32.constants.xlPasteValues)
+                used_range.PasteSpecial(Paste=-4163)
                 excel.CutCopyMode = False
 
             self.perform_sheet_trim_win32(output_workbook, excel)

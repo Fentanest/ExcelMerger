@@ -10,6 +10,18 @@
     <height>310</height>
    </rect>
   </property>
+  <property name="minimumSize">
+   <size>
+    <width>340</width>
+    <height>310</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>340</width>
+    <height>310</height>
+   </size>
+  </property>
   <property name="font">
    <font>
     <family>Noto Sans</family>
@@ -21,7 +33,7 @@
   </property>
   <property name="windowIcon">
    <iconset>
-    <normaloff>lib/logo.png</normaloff>lib/logo.png</iconset>
+    <normaloff>../../.designer/backup/lib/logo.png</normaloff>../../.designer/backup/lib/logo.png</iconset>
   </property>
   <property name="styleSheet">
    <string notr="true">* {

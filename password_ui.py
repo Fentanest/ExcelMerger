@@ -24,12 +24,14 @@ class Ui_Dialog(object):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
         Dialog.resize(210, 230)
+        Dialog.setMinimumSize(QSize(210, 230))
+        Dialog.setMaximumSize(QSize(210, 230))
         font = QFont()
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
         Dialog.setFont(font)
         icon = QIcon()
-        icon.addFile(u"lib/logo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
+        icon.addFile(u"../../.designer/backup/lib/logo.png", QSize(), QIcon.Mode.Normal, QIcon.State.Off)
         Dialog.setWindowIcon(icon)
         Dialog.setStyleSheet(u"* {\n"
 "font-family: \"Noto Sans\";\n"

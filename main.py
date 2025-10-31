@@ -611,7 +611,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if sys.platform == 'win32' and win32:
                 try:
                     # Attempt to dispatch Excel application to check if it's installed
-                    excel_app_check = win32.gencache.EnsureDispatch('Excel.Application')
+                    excel_app_check = win32.Dispatch('Excel.Application')
                     excel_app_check.Quit() # Quit immediately after checking
                     use_win32_merge = True
                 except Exception as e:

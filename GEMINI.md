@@ -70,8 +70,6 @@ The Excel Merger is a desktop GUI application built with **PySide6**. Its primar
 | actionActivateDebugMode | If checked, enables more verbose debug logging. |
 | actionAddExcelFile | Opens a file explorer to add Excel files to `listFileAdded`. |
 | actionSetSavePath | Same function as `btnBrowsePath`; specifies the save path. |
-| actionCancelWork | - |
-| actionUndoCancel | Redoes a canceled action (Redo). Shortcut: Ctrl+Y. |
 | actionSetGlobalPassword | Opens the `globalpassword.ui` dialog for setting a global password. |
 | actionSetOutPutEncryption | Opens the `encryption.ui` dialog for setting the output file's encryption password. |
 | checkBoxOnlyValue | If checked, copies only the values from cells, ignoring formulas. |
