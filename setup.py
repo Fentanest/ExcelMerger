@@ -55,7 +55,18 @@ build_exe_options = {
         "PySide6.QtQml",
         "PySide6.QtPdf",
         "PySide6.QtVirtualKeyboard",
-        "PySide6.QtOpenGL"
+        "PySide6.QtOpenGL",
+        "tkinter",
+        "unittest",
+        "sqlite3",
+        "curses",
+        "pydoc_data",
+        "multiprocessing",
+        "_decimal",
+        "pandas",
+        "numpy",
+        "pytz",
+        "dateutil"
     ]
 }
 
