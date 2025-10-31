@@ -4,7 +4,17 @@ if 'GTK_MODULES' in os.environ:
     del os.environ['GTK_MODULES']
 from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog, QListView, QAbstractItemView, QDialog
 from PySide6.QtCore import (QCoreApplication, QStringListModel, Qt, QMimeData, QEvent, QPoint, QUrl)
-from PySide6.QtGui import QDrag, QKeySequence, QAction, QDesktopServices
+from PySide6.QtGui import QDrag, QKeySequence, QAction, QDesktopServices, QIcon
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 from main_ui import Ui_MainWindow
 from dialogs import PasswordDialog, GlobalPasswordDialog, EncryptionDialog, OptionsDialog
@@ -30,6 +40,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        self.setWindowIcon(QIcon(resource_path("lib/logo.png")))
         # self.setWindowTitle("Excel Merger")
 
         # Settings Manager
@@ -234,6 +245,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def open_global_password_dialog(self):
         dialog = GlobalPasswordDialog(self)
+        dialog.setWindowIcon(self.windowIcon())
         dialog.chkGlobalPassword.setChecked(self.use_global_password)
         dialog.lineEditGlobalPassword.setText(self.global_password)
         dialog.lineEditGlobalPassword.setEnabled(self.use_global_password)
@@ -248,6 +260,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def open_encryption_dialog(self):
         dialog = EncryptionDialog(self)
+        dialog.setWindowIcon(self.windowIcon())
         dialog.chkEnablePassword.setChecked(self.encrypt_output)
         dialog.lineEditPassword.setText(self.output_encryption_password)
         dialog.lineEditPassword.setEnabled(self.encrypt_output)
@@ -270,6 +283,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             'sheet_trim_cols': self.options.get('sheet_trim_cols', False)
         }
         dialog = OptionsDialog(self, current_options=options_for_dialog)
+        dialog.setWindowIcon(self.windowIcon())
         if dialog.exec():
             # Update only the options managed by OptionsDialog
             updated_options = dialog.get_options()

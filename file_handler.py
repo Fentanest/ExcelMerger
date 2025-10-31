@@ -97,6 +97,7 @@ class FileHandler:
             if self.main_window.debug_mode:
                 self.main_window.txtLogOutput.append(f"DEBUG: Showing PasswordDialog for {basename}.")
             dialog = PasswordDialog(basename, self.main_window)
+            dialog.setWindowIcon(self.main_window.windowIcon())
             result = dialog.exec()
 
             if dialog.stopped:
