@@ -11,7 +11,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['pandas', 'numpy', 'pytz', 'dateutil', 'sqlite3', 'curses', 'unittest', 'tkinter', 'pydoc_data', 'multiprocessing', '_decimal'],
     noarchive=False,
     optimize=0,
 )
@@ -22,7 +22,17 @@ unwanted_binaries = {
     'Qt6Quick.dll',
     'Qt6Pdf.dll',
     'Qt6VirtualKeyboard.dll',
-    'opengl32sw.dll'
+    'opengl32sw.dll',
+    'Qt6OpenGL.dll',
+    'Qt6Svg.dll',
+    'qgif.dll',
+    'qicns.dll',
+    'qjpeg.dll',
+    'qpdf.dll',
+    'qtga.dll',
+    'qtiff.dll',
+    'qwbmp.dll',
+    'qwebp.dll',
 }
 a.binaries = TOC([
     (name, path, typecode)

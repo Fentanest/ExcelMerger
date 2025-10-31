@@ -4,3 +4,4 @@ xlrd==2.0.2
 msoffcrypto-tool
 cryptography
 pywin32; sys_platform == 'win32'
+pyxlsb

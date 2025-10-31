@@ -412,7 +412,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if basename in self.file_info: # Skip duplicates
                 continue
 
-            if file.endswith('.xlsx') or file.endswith('.xls'):
+            if file.lower().endswith(('.xlsx', '.xls', '.xlsb', '.xlsm', '.csv')):
                 sheet_names, processed_file_path = self.file_handler.get_sheet_names(file)
 
                 if sheet_names is not None and processed_file_path is not None:
@@ -428,7 +428,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def add_excel_file(self):
         self.txtLogOutput.append("add_excel_file triggered")
-        files, _ = QFileDialog.getOpenFileNames(self, "ADD EXCEL FILES DIALOG", "", "Excel Files (*.xlsx *.xls)")
+        files, _ = QFileDialog.getOpenFileNames(self, "ADD EXCEL FILES DIALOG", "", "Excel Files (*.xlsx *.xls *.xlsb *.xlsm *.csv)")
         if files:
             self.add_files(files)
 

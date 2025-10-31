@@ -8,22 +8,22 @@ class MergerWin32:
         self.main_window = main_window
         self.win32 = win32
 
-    def convert_xls_to_xlsx_win32(self, xls_path):
+    def convert_to_xlsx_win32(self, file_path):
         if not self.win32:
-            self.main_window.txtLogOutput.append("pywin32가 설치되지 않아 .xls 변환을 건너뜁니다.")
+            self.main_window.txtLogOutput.append("pywin32가 설치되지 않아 변환을 건너뜁니다.")
             return None
         excel = None # Initialize excel to None
         try:
             excel = self.win32.Dispatch('Excel.Application')
             excel.Visible = False # Keep it hidden
             
-            file_name = os.path.basename(xls_path)
+            file_name = os.path.basename(file_path)
             password = self.main_window.file_passwords.get(file_name)
 
             if password:
-                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0, Password=password)
+                wb = excel.Workbooks.Open(os.path.abspath(file_path), UpdateLinks=0, Password=password)
             else:
-                wb = excel.Workbooks.Open(os.path.abspath(xls_path), UpdateLinks=0)
+                wb = excel.Workbooks.Open(os.path.abspath(file_path), UpdateLinks=0)
             
             # Create a temporary file path for the xlsx file
             fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='excelmerger_')
@@ -34,11 +34,12 @@ class MergerWin32:
             excel.DisplayAlerts = True
             wb.Close()
             
-            self.main_window.txtLogOutput.append(f".xls 파일을 .xlsx로 변환: {os.path.basename(xls_path)} -> {os.path.basename(xlsx_path)}")
+            ext = os.path.splitext(file_name)[1]
+            self.main_window.txtLogOutput.append(f"{ext} 파일을 .xlsx로 변환: {file_name} -> {os.path.basename(xlsx_path)}")
             self.main_window.temp_files.append(xlsx_path)
             return xlsx_path
         except Exception as e:
-            self.main_window.txtLogOutput.append(f".xls to .xlsx 변환 오류: {e}")
+            self.main_window.txtLogOutput.append(f"파일 변환 오류: {e}")
             return None
         finally:
             if excel:

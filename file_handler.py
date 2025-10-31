@@ -5,6 +5,9 @@ import msoffcrypto
 import openpyxl
 import xlrd
 from dialogs import PasswordDialog
+import sys
+import csv
+from pyxlsb import open_workbook as open_xlsb
 
 class FileHandler:
     def __init__(self, main_window):
@@ -12,43 +15,152 @@ class FileHandler:
 
     def _open_workbook(self, file_path, file_name, data_only=False):
         try:
-            if file_path.endswith('.xlsx'):
+            if file_path.lower().endswith('.xlsx'):
                 return openpyxl.load_workbook(file_path, read_only=False, data_only=data_only)
-            elif file_path.endswith('.xls'):
+            elif file_path.lower().endswith('.xls'):
                 return xlrd.open_workbook(file_path, formatting_info=True)
         except Exception as e:
             self.main_window.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
             return None
         return None
 
+    def convert_to_xlsx(self, file_path):
+        """Converts various Excel formats to XLSX, returns path to new file."""
+        file_name = os.path.basename(file_path)
+        lower_file_path = file_path.lower()
+
+        # High-quality conversion for .xls, .xlsb, .xlsm on Windows
+        if sys.platform == 'win32' and self.main_window.merger_win32.win32 and lower_file_path.endswith(('.xls', '.xlsb', '.xlsm')):
+            return self.main_window.merger_win32.convert_xls_to_xlsx_win32(file_path)
+
+        # CSV to XLSX conversion (all platforms)
+        if lower_file_path.endswith('.csv'):
+            try:
+                self.main_window.txtLogOutput.append(f".csv 파일을 .xlsx로 변환 중: {file_name}")
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                
+                try:
+                    with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
+                        reader = csv.reader(csvfile)
+                        for row in reader:
+                            ws.append(row)
+                except UnicodeDecodeError:
+                    with open(file_path, 'r', newline='', encoding='cp949') as csvfile: # Fallback for Korean
+                        reader = csv.reader(csvfile)
+                        for row in reader:
+                            ws.append(row)
+
+                fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='csv_converted_')
+                os.close(fd)
+                wb.save(xlsx_path)
+                self.main_window.temp_files.append(xlsx_path)
+                return xlsx_path
+            except Exception as e:
+                self.main_window.txtLogOutput.append(f".csv to .xlsx 변환 오류: {e}")
+                return None
+
+        # Non-Win32 conversions
+        try:
+            fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='converted_')
+            os.close(fd)
+            
+            # .xlsb to .xlsx
+            if lower_file_path.endswith('.xlsb'):
+                self.main_window.txtLogOutput.append(f".xlsb 파일을 .xlsx로 변환 중: {file_name}")
+                with open_xlsb(file_path) as wb_xlsb:
+                    wb_xlsx = openpyxl.Workbook()
+                    wb_xlsx.remove(wb_xlsx.active)
+                    for sheet_name in wb_xlsb.sheets:
+                        ws_xlsx = wb_xlsx.create_sheet(sheet_name)
+                        with wb_xlsb.get_sheet(sheet_name) as sheet_xlsb:
+                            for row in sheet_xlsb.rows():
+                                ws_xlsx.append([c.v for c in row])
+                    wb_xlsx.save(xlsx_path)
+                self.main_window.temp_files.append(xlsx_path)
+                return xlsx_path
+
+            # .xlsm to .xlsx
+            elif lower_file_path.endswith('.xlsm'):
+                self.main_window.txtLogOutput.append(f".xlsm 파일을 .xlsx로 변환 중 (VBA 제외): {file_name}")
+                wb = openpyxl.load_workbook(file_path, data_only=True) # data_only to avoid formula issues, removed read_only=True
+                wb.save(xlsx_path)
+                self.main_window.temp_files.append(xlsx_path)
+                return xlsx_path
+
+            # .xls to .xlsx
+            elif lower_file_path.endswith('.xls'):
+                self.main_window.txtLogOutput.append(f".xls 파일을 .xlsx로 변환 중: {file_name}")
+                wb_xls = xlrd.open_workbook(file_path)
+                wb_xlsx = openpyxl.Workbook()
+                wb_xlsx.remove(wb_xlsx.active)
+                for sheet_xls in wb_xls.sheets():
+                    ws_xlsx = wb_xlsx.create_sheet(sheet_xls.name)
+                    for row in range(sheet_xls.nrows):
+                        ws_xlsx.append(sheet_xls.row_values(row))
+                wb_xlsx.save(xlsx_path)
+                self.main_window.temp_files.append(xlsx_path)
+                return xlsx_path
+
+        except Exception as e:
+            self.main_window.txtLogOutput.append(f"파일 변환 오류 ({file_name}): {e}")
+            return None
+        
+        return file_path # Should not be reached if conversion was needed
+
     def get_sheet_names(self, file_path):
         file_name = os.path.basename(file_path)
-        workbook = self._open_workbook(file_path, file_name)
-        
         original_file_path = file_path
         processed_file_path = original_file_path
+        file_ext = os.path.splitext(file_name)[1].lower()
 
-        if workbook is None:
-            decrypted_temp_path = self.handle_encrypted_file(original_file_path)
-            if decrypted_temp_path:
-                workbook = self._open_workbook(decrypted_temp_path, file_name)
-                processed_file_path = decrypted_temp_path
-                if workbook is None:
-                    self.main_window.txtLogOutput.append(f"암호 해독된 파일 열기 실패: {file_name}")
-                    return None, None
-            else:
-                self.main_window.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
-                return None, None
-
-        if workbook:
+        # 1. Handle Encryption First (only for office files)
+        if file_ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
+            is_encrypted = False
             try:
-                if processed_file_path.endswith('.xlsx'):
-                    return workbook.sheetnames, processed_file_path
-                elif processed_file_path.endswith('.xls'):
-                    return workbook.sheet_names(), processed_file_path
-            except Exception as e:
-                self.main_window.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
+                with open(original_file_path, 'rb') as f:
+                    office_file = msoffcrypto.OfficeFile(f)
+                    if office_file.is_encrypted():
+                        is_encrypted = True
+            except Exception:
+                # Not a valid office file, let later stages handle it.
+                pass
+
+            if is_encrypted:
+                decrypted_temp_path = self.handle_encrypted_file(original_file_path)
+                if decrypted_temp_path:
+                    processed_file_path = decrypted_temp_path
+                else:
+                    self.main_window.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
+                    return None, None
+
+        # 2. Handle Conversion if necessary
+        if not processed_file_path.lower().endswith('.xlsx'):
+            converted_path = self.convert_to_xlsx(processed_file_path)
+            if converted_path:
+                # If the original file was decrypted, and then converted, we don't need the decrypted-only version anymore
+                if processed_file_path != original_file_path and processed_file_path in self.main_window.temp_files:
+                    try:
+                        os.remove(processed_file_path)
+                        self.main_window.temp_files.remove(processed_file_path)
+                    except OSError:
+                        pass # Ignore if it fails
+                processed_file_path = converted_path
+            else:
+                self.main_window.txtLogOutput.append(f"파일 변환에 실패하여 건너뜁니다: {file_name}")
                 return None, None
+
+        # 3. Get sheet names from the (now) .xlsx file
+        try:
+            workbook = self._open_workbook(processed_file_path, file_name)
+            if workbook:
+                if isinstance(workbook, openpyxl.Workbook):
+                    return workbook.sheetnames, processed_file_path
+                elif isinstance(workbook, xlrd.Book): # Should only be for xls if conversion failed
+                    return workbook.sheet_names(), processed_file_path
+        except Exception as e:
+            self.main_window.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
+
         return None, None
 
     def handle_encrypted_file(self, file_path):
