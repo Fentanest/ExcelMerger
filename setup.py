@@ -50,7 +50,13 @@ build_exe_options = {
     "packages": ["os", "sys", "re", "openpyxl", "xlrd", "msoffcrypto", "cffi", "cryptography"],
     "includes": ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets"],
     "include_files": [("lib/logo.png", "lib/logo.png"), ("lib/logo.ico", "lib/logo.ico")],
-    "excludes": []
+    "excludes": [
+        "PySide6.QtQuick",
+        "PySide6.QtQml",
+        "PySide6.QtPdf",
+        "PySide6.QtVirtualKeyboard",
+        "PySide6.QtOpenGL"
+    ]
 }
 
 base = None

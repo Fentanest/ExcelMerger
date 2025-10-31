@@ -272,6 +272,9 @@ border: 2px solid white;
        <property name="text">
         <string>열</string>
        </property>
+       <property name="shortcut">
+        <string>X</string>
+       </property>
       </widget>
      </item>
      <item>
