@@ -593,6 +593,7 @@ border: 2px solid white;
     <addaction name="actionSetOutputEncryption"/>
     <addaction name="actionOptions"/>
     <addaction name="actionActivateDebugMode"/>
+    <addaction name="actionWin32"/>
    </widget>
    <widget class="QMenu" name="menu_3">
     <property name="title">
@@ -689,6 +690,20 @@ border: 2px solid white;
    </property>
    <property name="text">
     <string>제작자 블로그</string>
+   </property>
+  </action>
+  <action name="actionWin32">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="QIcon::ThemeIcon::WindowNew"/>
+   </property>
+   <property name="text">
+    <string>고품질 모드 활성화</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+U</string>
    </property>
   </action>
  </widget>

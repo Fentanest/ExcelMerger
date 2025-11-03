@@ -145,6 +145,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.checkBoxOnlyValue.setChecked(self.options['only_value_copy'])
         self.checkBoxOnlyValue.toggled.connect(self.on_only_value_copy_toggled)
 
+        # Connect and set up Win32 mode action
+        self.use_win32_mode = self.options.get('use_win32_mode', True)
+        self.actionWin32.setChecked(self.use_win32_mode)
+        self.actionWin32.toggled.connect(self.on_win32_mode_toggled)
+        
+        # Disable Win32 mode option if not on Windows or win32com not available
+        if not (sys.platform == 'win32' and win32):
+            self.actionWin32.setEnabled(False)
+            self.actionWin32.setChecked(False)
+            self.use_win32_mode = False
+
     def open_blog(self):
         urls = ["https://hb.worklazy.net/excel-merger"]
         for url_str in urls:
@@ -304,6 +315,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def on_only_value_copy_toggled(self, checked):
         self.options['only_value_copy'] = checked
         self.gather_and_save_settings()
+
+    def on_win32_mode_toggled(self, checked):
+        self.use_win32_mode = checked
+        self.options['use_win32_mode'] = checked
+        self.gather_and_save_settings()
+        self.txtLogOutput.append(f"고품질 병합 모드: {'활성' if checked else '비활성'}")
 
     def on_debug_mode_toggled(self, checked):
         self.debug_mode = checked
@@ -626,17 +643,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         try:
             merge_type = self.options.get('merge_type', 'Sheet')
 
-            # Check if win32com is available and Excel is installed for high-quality merge
+            # Check if high-quality merge should be used
             use_win32_merge = False
-            if sys.platform == 'win32' and win32:
+            if sys.platform == 'win32' and win32 and self.use_win32_mode:
                 try:
                     # Attempt to dispatch Excel application to check if it's installed
                     excel_app_check = win32.Dispatch('Excel.Application')
                     excel_app_check.Quit() # Quit immediately after checking
                     use_win32_merge = True
                 except Exception as e:
-                    self.txtLogOutput.append(f"Excel 애플리케이션을 찾을 수 없습니다. 고품질 병합을 건너뜁니다: {e}")
+                    self.main_window.txtLogOutput.append(f"Excel 애플리케이션을 찾을 수 없습니다. 고품질 병합을 건너뜁니다: {e}")
                     use_win32_merge = False
+            
+            if use_win32_merge:
+                self.txtLogOutput.append("고품질 병합 모드로 시작합니다.")
+            else:
+                self.txtLogOutput.append("표준 병합 모드로 시작합니다.")
 
             if merge_type == 'Sheet':
                 if use_win32_merge: # Use win32 merge if available, regardless of only_value_copy

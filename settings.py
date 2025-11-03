@@ -32,7 +32,8 @@ class SettingsManager:
                 'sheet_trim_value': 0,
                 'sheet_trim_rows': False,
                 'sheet_trim_cols': False,
-                'only_value_copy': False
+                'only_value_copy': False,
+                'use_win32_mode': True
             },
             'debug_mode': False,
             'last_save_path': ""
