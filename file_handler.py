@@ -110,58 +110,52 @@ class FileHandler:
 
     def get_sheet_names(self, file_path):
         file_name = os.path.basename(file_path)
-        original_file_path = file_path
-        processed_file_path = original_file_path
+        processed_file_path = file_path
         file_ext = os.path.splitext(file_name)[1].lower()
 
-        # 1. Handle Encryption First (only for office files)
+        # 1. Handle Encryption
         if file_ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
             is_encrypted = False
             try:
-                with open(original_file_path, 'rb') as f:
+                with open(processed_file_path, 'rb') as f:
                     office_file = msoffcrypto.OfficeFile(f)
                     if office_file.is_encrypted():
                         is_encrypted = True
             except Exception:
-                # Not a valid office file, let later stages handle it.
-                pass
+                pass # Not a valid office file
 
             if is_encrypted:
-                decrypted_temp_path = self.handle_encrypted_file(original_file_path)
+                decrypted_temp_path = self.handle_encrypted_file(processed_file_path)
                 if decrypted_temp_path:
                     processed_file_path = decrypted_temp_path
                 else:
                     self.main_window.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
                     return None, None
 
-        # 2. Handle Conversion if necessary
-        if not processed_file_path.lower().endswith('.xlsx'):
-            converted_path = self.convert_to_xlsx(processed_file_path)
-            if converted_path:
-                # If the original file was decrypted, and then converted, we don't need the decrypted-only version anymore
-                if processed_file_path != original_file_path and processed_file_path in self.main_window.temp_files:
-                    try:
-                        os.remove(processed_file_path)
-                        self.main_window.temp_files.remove(processed_file_path)
-                    except OSError:
-                        pass # Ignore if it fails
-                processed_file_path = converted_path
-            else:
-                self.main_window.txtLogOutput.append(f"파일 변환에 실패하여 건너뜁니다: {file_name}")
-                return None, None
-
-        # 3. Get sheet names from the (now) .xlsx file
+        # 2. Get sheet names using Python libraries
+        self.main_window.txtLogOutput.append(f"시트 목록 읽기: {file_name}")
         try:
-            workbook = self._open_workbook(processed_file_path, file_name)
-            if workbook:
-                if isinstance(workbook, openpyxl.Workbook):
-                    return workbook.sheetnames, processed_file_path
-                elif isinstance(workbook, xlrd.Book): # Should only be for xls if conversion failed
-                    return workbook.sheet_names(), processed_file_path
+            lower_path = processed_file_path.lower()
+            if lower_path.endswith('.xlsx') or lower_path.endswith('.xlsm'):
+                wb = openpyxl.load_workbook(processed_file_path, read_only=True, data_only=True)
+                sheet_names = wb.sheetnames
+                wb.close()
+                return sheet_names, processed_file_path
+            elif lower_path.endswith('.xls'):
+                wb = xlrd.open_workbook(processed_file_path, on_demand=True)
+                return wb.sheet_names(), processed_file_path
+            elif lower_path.endswith('.xlsb'):
+                with open_xlsb(processed_file_path) as wb:
+                    return wb.sheets, processed_file_path
+            elif lower_path.endswith('.csv'):
+                return [os.path.splitext(file_name)[0]], processed_file_path
+            else:
+                self.main_window.txtLogOutput.append(f"지원하지 않는 파일 형식입니다: {file_name}")
+                return None, None
+                
         except Exception as e:
-            self.main_window.txtLogOutput.append(f"시트 이름 가져오기 오류 {file_name}: {e}")
-
-        return None, None
+            self.main_window.txtLogOutput.append(f"시트 이름 가져오기 오류 ({file_name}): {e}")
+            return None, None
 
     def handle_encrypted_file(self, file_path):
         if self.main_window.stop_asking_for_passwords:

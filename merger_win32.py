@@ -8,31 +8,26 @@ class MergerWin32:
         self.main_window = main_window
         self.win32 = win32
 
-    def convert_to_xlsx_win32(self, file_path):
-        if not self.win32:
-            self.main_window.txtLogOutput.append("pywin32가 설치되지 않아 변환을 건너뜁니다.")
+    def convert_to_xlsx_win32(self, file_path, excel_instance):
+        """
+        Converts a file to XLSX using a provided Excel instance.
+        Does NOT create or quit the Excel instance itself.
+        """
+        if not excel_instance:
             return None
-        excel = None # Initialize excel to None
+        
+        wb = None
         try:
-            excel = self.win32.Dispatch('Excel.Application')
-            excel.Visible = False # Keep it hidden
-            
             file_name = os.path.basename(file_path)
-            password = self.main_window.file_passwords.get(file_name)
-
-            if password:
-                wb = excel.Workbooks.Open(os.path.abspath(file_path), UpdateLinks=0, Password=password)
-            else:
-                wb = excel.Workbooks.Open(os.path.abspath(file_path), UpdateLinks=0)
+            # Password should have been handled by decryption before this stage.
+            # We open the file with the provided excel_instance.
+            wb = excel_instance.Workbooks.Open(os.path.abspath(file_path), UpdateLinks=0)
             
-            # Create a temporary file path for the xlsx file
             fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='excelmerger_')
             os.close(fd)
 
-            excel.DisplayAlerts = False
+            # The parent function is responsible for DisplayAlerts
             wb.SaveAs(xlsx_path, FileFormat=51) # 51 is for xlsx format
-            excel.DisplayAlerts = True
-            wb.Close()
             
             ext = os.path.splitext(file_name)[1]
             self.main_window.txtLogOutput.append(f"{ext} 파일을 .xlsx로 변환: {file_name} -> {os.path.basename(xlsx_path)}")
@@ -42,9 +37,9 @@ class MergerWin32:
             self.main_window.txtLogOutput.append(f"파일 변환 오류: {e}")
             return None
         finally:
-            if excel:
-                excel.DisplayAlerts = False
-                excel.Application.Quit()
+            if wb:
+                wb.Close(SaveChanges=False)
+            # DO NOT QUIT EXCEL HERE
 
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
@@ -69,6 +64,15 @@ class MergerWin32:
                     continue
                 
                 processed_path = os.path.abspath(info['processed_path'])
+
+                # If not an xlsx, convert it now using win32com
+                if not processed_path.lower().endswith('.xlsx'):
+                    self.main_window.txtLogOutput.append(f"고품질 병합을 위해 파일 변환 중: {file_name}")
+                    converted_path = self.convert_to_xlsx_win32(processed_path, excel)
+                    if converted_path is None:
+                        self.main_window.txtLogOutput.append(f"파일 변환 실패: {file_name}")
+                        continue # Skip this file
+                    processed_path = converted_path
 
                 password = self.main_window.file_passwords.get(file_name)
                 
@@ -198,6 +202,15 @@ class MergerWin32:
                     continue
                 
                 processed_path = os.path.abspath(info['processed_path'])
+
+                # If not an xlsx, convert it now using win32com
+                if not processed_path.lower().endswith('.xlsx'):
+                    self.main_window.txtLogOutput.append(f"고품질 병합을 위해 파일 변환 중: {file_name}")
+                    converted_path = self.convert_to_xlsx_win32(processed_path, excel)
+                    if converted_path is None:
+                        self.main_window.txtLogOutput.append(f"파일 변환 실패: {file_name}")
+                        continue # Skip this file
+                    processed_path = converted_path
                 
                 password = self.main_window.file_passwords.get(file_name)
 
