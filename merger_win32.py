@@ -88,6 +88,14 @@ class MergerWin32:
                     # Get the newly copied sheet (it becomes the active sheet after copy)
                     newly_copied_sheet = excel.ActiveSheet
 
+                    # Give it a temporary unique name to avoid conflicts during duplicate check
+                    try:
+                        temp_name = f"__temp_sheet_{time.time()}"
+                        newly_copied_sheet.Name = temp_name
+                    except Exception:
+                        # If temp name fails (highly unlikely), just proceed.
+                        pass
+
                     # New sheet naming logic
                     sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalSheet') # Default to OriginalSheet
                     if sheet_name_rule == 'OriginalBoth':
