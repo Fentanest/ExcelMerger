@@ -31,7 +31,7 @@ class FileHandler:
 
         # High-quality conversion for .xls, .xlsb, .xlsm on Windows
         if sys.platform == 'win32' and self.main_window.merger_win32.win32 and lower_file_path.endswith(('.xls', '.xlsb', '.xlsm')):
-            return self.main_window.merger_win32.convert_xls_to_xlsx_win32(file_path)
+            return self.main_window.merger_win32.convert_to_xlsx_win32(file_path)
 
         # CSV to XLSX conversion (all platforms)
         if lower_file_path.endswith('.csv'):
