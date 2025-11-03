@@ -82,11 +82,11 @@ class MergerWin32:
                     
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
-                    # Copy sheet to the end of the merged workbook
-                    source_sheet.Copy(After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count))
+                    # Copy sheet before the first sheet in the merged workbook for reliability
+                    source_sheet.Copy(Before=merged_workbook.Worksheets(1))
                     
-                    # Get the newly copied sheet
-                    newly_copied_sheet = merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+                    # Get the newly copied sheet (it becomes the active sheet after copy)
+                    newly_copied_sheet = excel.ActiveSheet
 
                     # New sheet naming logic
                     sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalSheet') # Default to OriginalSheet
@@ -162,7 +162,9 @@ class MergerWin32:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
         finally:
             if excel:
-                excel.DisplayAlerts = True
+                # It's crucial to set DisplayAlerts to False before quitting
+                # to prevent any save confirmation dialogs.
+                excel.DisplayAlerts = False
                 excel.Application.Quit()
 
     def _merge_by_axis_win32(self, sheets_to_merge, save_path, axis):
@@ -240,7 +242,9 @@ class MergerWin32:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
         finally:
             if excel:
-                excel.DisplayAlerts = True
+                # It's crucial to set DisplayAlerts to False before quitting
+                # to prevent any save confirmation dialogs for phantom workbooks.
+                excel.DisplayAlerts = False
                 excel.Application.Quit()
 
     def merge_horizontally_win32(self, sheets_to_merge, save_path):

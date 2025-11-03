@@ -40,8 +40,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        from version import __version__
         self.setWindowIcon(QIcon(resource_path("lib/logo.png")))
-        # self.setWindowTitle("Excel Merger")
+        self.setWindowTitle(f"Excel Merger v{__version__}")
+
+        # Create a disabled action to display the version in the 'Made by' menu
+        version_action = QAction(f"v{__version__}", self)
+        version_action.setEnabled(False)
+        self.menuMade_by_Fentanest.addAction(version_action)
 
         # Settings Manager
         self.settings_manager = SettingsManager()
@@ -140,7 +146,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.checkBoxOnlyValue.toggled.connect(self.on_only_value_copy_toggled)
 
     def open_blog(self):
-        urls = ["https://hb.worklazy.net", "https://worklazy.net"]
+        urls = ["https://hb.worklazy.net/excel-merger"]
         for url_str in urls:
             QDesktopServices.openUrl(QUrl(url_str))
 

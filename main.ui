@@ -452,6 +452,9 @@ border: 2px solid white;
         <property name="text">
          <string>모든 시트</string>
         </property>
+        <property name="shortcut">
+         <string>A</string>
+        </property>
        </widget>
       </item>
       <item>
@@ -468,6 +471,9 @@ border: 2px solid white;
         </property>
         <property name="text">
          <string>특정 시트</string>
+        </property>
+        <property name="shortcut">
+         <string>S</string>
         </property>
        </widget>
       </item>
@@ -502,6 +508,9 @@ border: 2px solid white;
         </property>
         <property name="text">
          <string>직접 선택</string>
+        </property>
+        <property name="shortcut">
+         <string>D</string>
         </property>
        </widget>
       </item>
