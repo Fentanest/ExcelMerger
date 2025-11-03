@@ -15,10 +15,40 @@ class FileHandler:
 
     def _open_workbook(self, file_path, file_name, data_only=False):
         try:
-            if file_path.lower().endswith('.xlsx'):
+            lower_path = file_path.lower()
+            if lower_path.endswith('.xlsx'):
                 return openpyxl.load_workbook(file_path, read_only=False, data_only=data_only)
-            elif file_path.lower().endswith('.xls'):
+            elif lower_path.endswith('.xlsm'):
+                return openpyxl.load_workbook(file_path, read_only=False, keep_vba=True, data_only=data_only)
+            elif lower_path.endswith('.xls'):
                 return xlrd.open_workbook(file_path, formatting_info=True)
+            elif lower_path.endswith('.xlsb'):
+                self.main_window.txtLogOutput.append(f"표준 병합을 위해 .xlsb 파일을 변환 중: {file_name}")
+                with open_xlsb(file_path) as wb_xlsb:
+                    wb_xlsx = openpyxl.Workbook()
+                    wb_xlsx.remove(wb_xlsx.active)
+                    for sheet_name in wb_xlsb.sheets:
+                        ws_xlsx = wb_xlsx.create_sheet(sheet_name)
+                        with wb_xlsb.get_sheet(sheet_name) as sheet_xlsb:
+                            for row in sheet_xlsb.rows():
+                                ws_xlsx.append([c.v for c in row])
+                    return wb_xlsx
+            elif lower_path.endswith('.csv'):
+                self.main_window.txtLogOutput.append(f"표준 병합을 위해 .csv 파일을 변환 중: {file_name}")
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = os.path.splitext(file_name)[0]
+                try:
+                    with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
+                        reader = csv.reader(csvfile)
+                        for row in reader:
+                            ws.append(row)
+                except UnicodeDecodeError:
+                    with open(file_path, 'r', newline='', encoding='cp949') as csvfile:
+                        reader = csv.reader(csvfile)
+                        for row in reader:
+                            ws.append(row)
+                return wb
         except Exception as e:
             self.main_window.txtLogOutput.append(f"파일 열기 오류 {file_name}: {e}")
             return None
@@ -136,7 +166,12 @@ class FileHandler:
         self.main_window.txtLogOutput.append(f"시트 목록 읽기: {file_name}")
         try:
             lower_path = processed_file_path.lower()
-            if lower_path.endswith('.xlsx') or lower_path.endswith('.xlsm'):
+            if lower_path.endswith('.xlsm'):
+                wb = openpyxl.load_workbook(processed_file_path, read_only=False, keep_vba=True, data_only=True)
+                sheet_names = wb.sheetnames
+                wb.close()
+                return sheet_names, processed_file_path
+            elif lower_path.endswith('.xlsx'):
                 wb = openpyxl.load_workbook(processed_file_path, read_only=True, data_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()

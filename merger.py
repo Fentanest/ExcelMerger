@@ -32,12 +32,10 @@ class Merger:
                 if not source_workbook:
                     continue
 
-                if file_path.endswith('.xlsx'):
+                if file_path.lower().endswith(('.xlsx', '.xlsm', '.xlsb', '.csv')):
                     source_sheet = source_workbook[sheet_name]
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
-
-                # New sheet naming logic
                 sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalBoth')
                 if sheet_name_rule == 'OriginalBoth':
                     new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
@@ -100,7 +98,7 @@ class Merger:
                 if not source_workbook:
                     continue
 
-                if file_path.endswith('.xlsx'):
+                if file_path.lower().endswith(('.xlsx', '.xlsm', '.xlsb', '.csv')):
                     source_sheet = source_workbook[sheet_name]
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
