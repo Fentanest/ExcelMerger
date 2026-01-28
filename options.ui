@@ -374,7 +374,7 @@ border: 2px solid white;
         <string>원본파일명</string>
        </property>
        <property name="shortcut">
-        <string>W</string>
+        <string>Ctrl+S</string>
        </property>
       </widget>
      </item>

@@ -226,7 +226,7 @@ class Ui_Dialog(object):
 #endif // QT_CONFIG(shortcut)
         self.radioButtonOriginalFileName.setText(QCoreApplication.translate("Dialog", u"\uc6d0\ubcf8\ud30c\uc77c\uba85", None))
 #if QT_CONFIG(shortcut)
-        self.radioButtonOriginalFileName.setShortcut(QCoreApplication.translate("Dialog", u"W", None))
+        self.radioButtonOriginalFileName.setShortcut(QCoreApplication.translate("Dialog", u"Ctrl+S", None))
 #endif // QT_CONFIG(shortcut)
     # retranslateUi
 
