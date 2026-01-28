@@ -92,7 +92,7 @@ border: 2px solid white;
     <rect>
      <x>10</x>
      <y>110</y>
-     <width>200</width>
+     <width>230</width>
      <height>70</height>
     </rect>
    </property>
@@ -110,7 +110,7 @@ border: 2px solid white;
      <rect>
       <x>11</x>
       <y>29</y>
-      <width>173</width>
+      <width>200</width>
       <height>29</height>
      </rect>
     </property>
@@ -298,7 +298,7 @@ border: 2px solid white;
     <rect>
      <x>10</x>
      <y>10</y>
-     <width>200</width>
+     <width>230</width>
      <height>90</height>
     </rect>
    </property>
@@ -311,12 +311,12 @@ border: 2px solid white;
    <property name="title">
     <string>시트 이름 규칙(시트 병합 전용)</string>
    </property>
-   <widget class="QWidget" name="">
+   <widget class="QWidget" name="layoutWidget">
     <property name="geometry">
      <rect>
       <x>10</x>
       <y>30</y>
-      <width>160</width>
+      <width>200</width>
       <height>44</height>
      </rect>
     </property>
