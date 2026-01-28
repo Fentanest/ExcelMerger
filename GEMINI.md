@@ -114,6 +114,7 @@ Contains options moved from the main UI.
 | radioButtonVertical | Appends the data from all selected sheets vertically (top-to-bottom) into a single sheet. |
 | radioButtonOriginalBoth | Sets the output sheet names to "OriginalFileName_OriginalSheetName". Mutually exclusive with the option below. |
 | radioButtonOriginalSheet | Sets the output sheet names to "OriginalSheetName". Appends a number for duplicates. Mutually exclusive with the option above. |
+| radioButtonOriginalFileName | Sets the output sheet names to "OriginalFileName". Mutually exclusive with the option below. |
 | spinBoxEmpty | Numeric input for the "SheetTrim" feature. Removes consecutive empty rows/columns that exceed this number. `0` disables the feature. |
 | checkBoxEmptyRow | If checked, enables SheetTrim for empty rows. |
 | checkBoxEmptyColumn | If checked, enables SheetTrim for empty columns. |

@@ -16,8 +16,8 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QAbstractButton, QApplication, QCheckBox, QDialog,
-    QDialogButtonBox, QGroupBox, QHBoxLayout, QLabel,
-    QRadioButton, QSizePolicy, QSpinBox, QVBoxLayout,
+    QDialogButtonBox, QGridLayout, QGroupBox, QHBoxLayout,
+    QLabel, QRadioButton, QSizePolicy, QSpinBox,
     QWidget)
 
 class Ui_Dialog(object):
@@ -149,26 +149,32 @@ class Ui_Dialog(object):
         self.groupBox_4.setObjectName(u"groupBox_4")
         self.groupBox_4.setGeometry(QRect(10, 10, 200, 90))
         self.groupBox_4.setFont(font)
-        self.layoutWidget_3 = QWidget(self.groupBox_4)
-        self.layoutWidget_3.setObjectName(u"layoutWidget_3")
-        self.layoutWidget_3.setGeometry(QRect(10, 20, 173, 60))
-        self.layoutWidget_3.setFont(font)
-        self.verticalLayout = QVBoxLayout(self.layoutWidget_3)
-        self.verticalLayout.setObjectName(u"verticalLayout")
-        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
-        self.radioButtonOriginalBoth = QRadioButton(self.layoutWidget_3)
+        self.widget = QWidget(self.groupBox_4)
+        self.widget.setObjectName(u"widget")
+        self.widget.setGeometry(QRect(10, 30, 160, 44))
+        self.gridLayout = QGridLayout(self.widget)
+        self.gridLayout.setObjectName(u"gridLayout")
+        self.gridLayout.setContentsMargins(0, 0, 0, 0)
+        self.radioButtonOriginalBoth = QRadioButton(self.widget)
         self.radioButtonOriginalBoth.setObjectName(u"radioButtonOriginalBoth")
         self.radioButtonOriginalBoth.setFont(font)
         self.radioButtonOriginalBoth.setStyleSheet(u"")
 
-        self.verticalLayout.addWidget(self.radioButtonOriginalBoth)
+        self.gridLayout.addWidget(self.radioButtonOriginalBoth, 0, 0, 1, 2)
 
-        self.radioButtonOriginalSheet = QRadioButton(self.layoutWidget_3)
+        self.radioButtonOriginalSheet = QRadioButton(self.widget)
         self.radioButtonOriginalSheet.setObjectName(u"radioButtonOriginalSheet")
         self.radioButtonOriginalSheet.setFont(font)
         self.radioButtonOriginalSheet.setStyleSheet(u"")
 
-        self.verticalLayout.addWidget(self.radioButtonOriginalSheet)
+        self.gridLayout.addWidget(self.radioButtonOriginalSheet, 1, 0, 1, 1)
+
+        self.radioButtonOriginalFileName = QRadioButton(self.widget)
+        self.radioButtonOriginalFileName.setObjectName(u"radioButtonOriginalFileName")
+        self.radioButtonOriginalFileName.setFont(font)
+        self.radioButtonOriginalFileName.setStyleSheet(u"")
+
+        self.gridLayout.addWidget(self.radioButtonOriginalFileName, 1, 1, 1, 1)
 
         self.groupBox_4.raise_()
         self.buttonBox.raise_()
@@ -217,6 +223,10 @@ class Ui_Dialog(object):
         self.radioButtonOriginalSheet.setText(QCoreApplication.translate("Dialog", u"\uc6d0\ubcf8\uc2dc\ud2b8\uba85", None))
 #if QT_CONFIG(shortcut)
         self.radioButtonOriginalSheet.setShortcut(QCoreApplication.translate("Dialog", u"W", None))
+#endif // QT_CONFIG(shortcut)
+        self.radioButtonOriginalFileName.setText(QCoreApplication.translate("Dialog", u"\uc6d0\ubcf8\ud30c\uc77c\uba85", None))
+#if QT_CONFIG(shortcut)
+        self.radioButtonOriginalFileName.setShortcut(QCoreApplication.translate("Dialog", u"W", None))
 #endif // QT_CONFIG(shortcut)
     # retranslateUi
 

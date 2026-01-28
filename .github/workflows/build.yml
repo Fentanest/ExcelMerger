@@ -1,0 +1,227 @@
+name: Build Cross-Platform Executables
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-release-windows:
+    runs-on: [self-hosted, Windows, X64, 230]
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 
+
+    - name: Get version from version.py
+      id: get_version
+      shell: powershell
+      run: |
+        $versionString = (Get-Content version.py -Raw) -match '__version__ = "(.+)"' | ForEach-Object { $matches[1] }
+        if (-not $versionString) {
+          Write-Error "version.py에서 __version__을 찾을 수 없습니다."
+          exit 1
+        }
+        echo "version=$versionString" >> $env:GITHUB_OUTPUT
+        echo "tag=v$versionString" >> $env:GITHUB_OUTPUT
+        Write-Output "Detected version: $versionString, tag: v$versionString"
+
+    - name: Check if tag already exists
+      id: check_tag
+      shell: powershell
+      run: |
+        $tagExists = git ls-remote --tags origin | Select-String -Pattern "refs/tags/${{ steps.get_version.outputs.tag }}$"
+        if ($tagExists) {
+          echo "tag_exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Output "Tag ${{ steps.get_version.outputs.tag }} already exists. Skipping build."
+        } else {
+          echo "tag_exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Output "Tag ${{ steps.get_version.outputs.tag }} does not exist. Proceeding with build."
+        }
+
+    - name: Clean previous build artifacts
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      shell: powershell
+      run: |
+        Remove-Item -Path "venv", "build", "dist" -Recurse -Force -ErrorAction SilentlyContinue
+
+    - name: Set up Python
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+
+    - name: Create and populate virtual environment
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      shell: powershell
+      run: |
+        python -m venv venv
+        .\venv\Scripts\python.exe -m pip install --upgrade pip
+        .\venv\Scripts\pip.exe install -r requirements.txt
+        .\venv\Scripts\pip.exe install pyinstaller
+
+    - name: Setup UPX
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      id: setup_upx
+      shell: powershell
+      run: |
+        $version = "5.1.0"
+        $upxExtractDir = "${env:TEMP}\upx"
+        $upxDir = Join-Path $upxExtractDir "upx-${version}-win64"
+        $upxPath = Join-Path $upxDir "upx.exe"
+        $zipPath = "${env:TEMP}\upx-${version}-win64.zip"
+        $downloadUrl = "https://github.com/upx/upx/releases/download/v${version}/upx-${version}-win64.zip"
+
+        if (-not (Test-Path $upxPath)) {
+          if (Test-Path $upxExtractDir) { Remove-Item -Recurse -Force $upxExtractDir }
+          Write-Output "Downloading UPX $version from $downloadUrl"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $upxExtractDir -Force
+        }
+        
+        if (-not (Test-Path $upxPath)) {
+          Write-Error "UPX executable not found at $upxPath after download/extract."
+          exit 1
+        }
+
+        Write-Output "Found UPX at: $upxPath"
+        echo "upx_path=$upxPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+    - name: Build executable with PyInstaller
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      shell: powershell
+      run: .\venv\Scripts\pyinstaller.exe ExcelMerger.spec
+
+    - name: Compress executable with UPX
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      shell: powershell
+      run: |
+        & "${{ steps.setup_upx.outputs.upx_path }}" --best --lzma --force dist/ExcelMerger.exe
+
+    - name: Upload Windows executable as an artifact
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ExcelMerger-Windows-${{ steps.get_version.outputs.version }}
+        path: dist/ExcelMerger.exe
+
+    - name: Create or Update GitHub Release with Windows asset
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: "ExcelMerger v${{ steps.get_version.outputs.version }}"
+        body: |
+          Automated release of ExcelMerger v${{ steps.get_version.outputs.version }}.
+          Commit: ${{ github.sha }}
+        files: dist/ExcelMerger.exe
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+
+  build-and-release-linux:
+    runs-on: [self-hosted, Linux, X64, 229]
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version from version.py
+      id: get_version
+      run: |
+        versionString=$(grep -oP '__version__ = "\K[^"]+' version.py)
+        if [ -z "$versionString" ]; then
+          echo "::error::Could not find __version__ in version.py"
+          exit 1
+        fi
+        echo "version=$versionString" >> "$GITHUB_OUTPUT"
+        echo "tag=v$versionString" >> "$GITHUB_OUTPUT"
+        echo "Detected version: $versionString, tag: v$versionString"
+
+    - name: Check if tag already exists
+      id: check_tag
+      run: |
+        if git ls-remote --tags origin | grep -q "refs/tags/${{ steps.get_version.outputs.tag }}$"; then
+          echo "tag_exists=true" >> $GITHUB_OUTPUT
+          echo "Tag ${{ steps.get_version.outputs.tag }} already exists. Skipping build."
+        else
+          echo "tag_exists=false" >> $GITHUB_OUTPUT
+          echo "Tag ${{ steps.get_version.outputs.tag }} does not exist. Proceeding with build."
+        fi
+
+    - name: Clean previous build artifacts
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      run: rm -rf venv build dist
+
+    - name: Set up Python
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.14'
+
+    - name: Create and populate virtual environment
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      run: |
+        python3 -m venv venv
+        ./venv/bin/python -m pip install --upgrade pip
+        ./venv/bin/pip install -r requirements.txt
+        ./venv/bin/pip install pyinstaller
+
+    - name: Setup UPX
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      id: setup_upx
+      run: |
+        VERSION="5.1.0"
+        UPX_DIR="/tmp/upx-${VERSION}-amd64_linux"
+        UPX_PATH="${UPX_DIR}/upx"
+        TAR_PATH="/tmp/upx.tar.xz"
+        DOWNLOAD_URL="https://github.com/upx/upx/releases/download/v${VERSION}/upx-${VERSION}-amd64_linux.tar.xz"
+
+        if [ ! -f "$UPX_PATH" ]; then
+          rm -rf "$UPX_DIR"
+          echo "Downloading UPX $VERSION from $DOWNLOAD_URL"
+          wget -O "$TAR_PATH" "$DOWNLOAD_URL"
+          mkdir -p "$UPX_DIR"
+          tar -xf "$TAR_PATH" -C /tmp
+          mv /tmp/upx-${VERSION}-amd64_linux/* "$UPX_DIR"/
+        fi
+
+        if [ ! -f "$UPX_PATH" ]; then
+          echo "::error::UPX executable not found at $UPX_PATH after download/extract."
+          exit 1
+        fi
+        
+        echo "Found UPX at: $UPX_PATH"
+        echo "upx_path=$UPX_PATH" >> "$GITHUB_OUTPUT"
+
+    - name: Build executable with PyInstaller
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      run: ./venv/bin/pyinstaller ExcelMerger.spec
+
+    - name: Compress executable with UPX
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      run: |
+        ${{ steps.setup_upx.outputs.upx_path }} --best --lzma --force dist/ExcelMerger
+
+    - name: Upload Linux executable as an artifact
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ExcelMerger-Linux-${{ steps.get_version.outputs.version }}
+        path: dist/ExcelMerger
+
+    - name: Update GitHub Release with Linux asset
+      if: steps.check_tag.outputs.tag_exists == 'false'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        files: dist/ExcelMerger

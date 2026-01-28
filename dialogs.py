@@ -44,10 +44,13 @@ class OptionsDialog(QDialog, Ui_OptionsDialog):
             self.radioButtonVertical.setChecked(True)
 
         # Set sheet name rule
-        if options.get('sheet_name_rule') == 'OriginalBoth':
-            self.radioButtonOriginalBoth.setChecked(True)
-        else: # 'OriginalSheet' is the default
+        sheet_name_rule = options.get('sheet_name_rule', 'OriginalBoth')
+        if sheet_name_rule == 'OriginalSheet':
             self.radioButtonOriginalSheet.setChecked(True)
+        elif sheet_name_rule == 'OriginalFileName':
+            self.radioButtonOriginalFileName.setChecked(True)
+        else:  # 'OriginalBoth' is the default
+            self.radioButtonOriginalBoth.setChecked(True)
 
         # Set SheetTrim options
         self.spinBoxEmpty.setValue(options.get('sheet_trim_value', 0))
@@ -67,6 +70,8 @@ class OptionsDialog(QDialog, Ui_OptionsDialog):
             options['sheet_name_rule'] = 'OriginalBoth'
         elif self.radioButtonOriginalSheet.isChecked():
             options['sheet_name_rule'] = 'OriginalSheet'
+        elif self.radioButtonOriginalFileName.isChecked():
+            options['sheet_name_rule'] = 'OriginalFileName'
 
         options['sheet_trim_value'] = self.spinBoxEmpty.value()
         options['sheet_trim_rows'] = self.checkBoxEmptyRow.isChecked()

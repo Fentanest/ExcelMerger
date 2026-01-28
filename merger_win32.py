@@ -101,11 +101,13 @@ class MergerWin32:
                         pass
 
                     # New sheet naming logic
-                    sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalSheet') # Default to OriginalSheet
-                    if sheet_name_rule == 'OriginalBoth':
-                        new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
-                    else: # OriginalSheet
+                    sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalBoth')
+                    if sheet_name_rule == 'OriginalSheet':
                         new_sheet_name = sheet_name
+                    elif sheet_name_rule == 'OriginalFileName':
+                        new_sheet_name = os.path.splitext(file_name)[0]
+                    else: # OriginalBoth
+                        new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
 
                     # Sanitize and truncate
                     if len(new_sheet_name) > 31:
@@ -115,25 +117,19 @@ class MergerWin32:
                     # Replace them with underscores
                     new_sheet_name = new_sheet_name.replace('\\', '_').replace('/', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_').replace(':', '_')
 
-                    # Handle duplicates
+                    # Handle duplicates for all sheet name rules
                     original_new_sheet_name = new_sheet_name
                     counter = 2
                     while True:
                         try:
-                            # Check if a sheet with this name already exists
-                            # This will raise an exception if the sheet does not exist
-                            merged_workbook.Worksheets(new_sheet_name)
-                            
-                            # If it exists, try a new name
+                            # Attempt to rename. COM exception will be thrown if name exists.
+                            newly_copied_sheet.Name = new_sheet_name
+                            break  # Success
+                        except Exception:
                             suffix = f" ({counter})"
                             truncated_len = 31 - len(suffix)
                             new_sheet_name = f"{original_new_sheet_name[:truncated_len]}{suffix}"
                             counter += 1
-                        except Exception:
-                            # Sheet does not exist, so this name is unique
-                            break
-                    
-                    newly_copied_sheet.Name = new_sheet_name
                     
                     source_workbook.Close(SaveChanges=False)
                     time.sleep(0.1)

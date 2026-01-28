@@ -37,10 +37,12 @@ class Merger:
                 else: # .xls
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
                 sheet_name_rule = self.main_window.options.get('sheet_name_rule', 'OriginalBoth')
-                if sheet_name_rule == 'OriginalBoth':
-                    new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
-                else: # OriginalSheet
+                if sheet_name_rule == 'OriginalSheet':
                     new_sheet_name = sheet_name
+                elif sheet_name_rule == 'OriginalFileName':
+                    new_sheet_name = os.path.splitext(file_name)[0]
+                else: # OriginalBoth
+                    new_sheet_name = f"{os.path.splitext(file_name)[0]}_{sheet_name}"
 
                 # Sanitize and truncate
                 if len(new_sheet_name) > 31:
@@ -48,7 +50,7 @@ class Merger:
                     new_sheet_name = new_sheet_name[:31]
                 new_sheet_name = re.sub(r'[\\\\[\\\\]\\*\\:\\?/]', '_', new_sheet_name)
 
-                # Handle duplicates
+                # Handle duplicates for all sheet name rules
                 original_new_sheet_name = new_sheet_name
                 counter = 2
                 while new_sheet_name in output_workbook.sheetnames:
