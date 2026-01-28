@@ -17,7 +17,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 
-        clean: true
 
     - name: Get version from version.py
       id: get_version
@@ -35,14 +34,23 @@ jobs:
     - name: Check if tag already exists
       id: check_tag
       shell: powershell
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ steps.get_version.outputs.tag }}
       run: |
-        $tagExists = git ls-remote --tags origin | Select-String -Pattern "refs/tags/${{ steps.get_version.outputs.tag }}$"
-        if ($tagExists) {
-          echo "tag_exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Output "Tag ${{ steps.get_version.outputs.tag }} already exists. Skipping build."
-        } else {
-          echo "tag_exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Output "Tag ${{ steps.get_version.outputs.tag }} does not exist. Proceeding with build."
+        $url = "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$env:TAG"
+        try {
+            Invoke-RestMethod -Uri $url -Headers @{ "Authorization" = "Bearer $env:GITHUB_TOKEN" }
+            echo "tag_exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Output "Tag $env:TAG already exists. Skipping build."
+        } catch {
+            if ($_.Exception.Response.StatusCode -eq 404) {
+                echo "tag_exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+                Write-Output "Tag $env:TAG does not exist. Proceeding with build."
+            } else {
+                Write-Error "API call failed with status: $($_.Exception.Response.StatusCode)"
+                exit 1
+            }
         }
 
     - name: Clean previous build artifacts
@@ -135,12 +143,11 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        clean: true
 
     - name: Get version from version.py
       id: get_version
       run: |
-        versionString=$(grep -oP '__version__ = "\K[^"]+' version.py)
+        versionString=$(grep -oP '__version__ = "\K[^"].+' version.py)
         if [ -z "$versionString" ]; then
           echo "::error::Could not find __version__ in version.py"
           exit 1
@@ -151,13 +158,23 @@ jobs:
 
     - name: Check if tag already exists
       id: check_tag
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ steps.get_version.outputs.tag }}
       run: |
-        if git ls-remote --tags origin | grep -q "refs/tags/${{ steps.get_version.outputs.tag }}$"; then
-          echo "tag_exists=true" >> $GITHUB_OUTPUT
-          echo "Tag ${{ steps.get_version.outputs.tag }} already exists. Skipping build."
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: Bearer $GITHUB_TOKEN" \
+          "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/$TAG")
+        
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+          echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+          echo "Tag $TAG already exists. Skipping build."
+        elif [ "$HTTP_STATUS" -eq 404 ]; then
+          echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+          echo "Tag $TAG does not exist. Proceeding with build."
         else
-          echo "tag_exists=false" >> $GITHUB_OUTPUT
-          echo "Tag ${{ steps.get_version.outputs.tag }} does not exist. Proceeding with build."
+          echo "::error::API call failed with status: $HTTP_STATUS"
+          exit 1
         fi
 
     - name: Clean previous build artifacts
