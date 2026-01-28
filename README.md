@@ -1,4 +1,7 @@
 # Excel Merger (엑셀 병합 프로그램)
+| <center>Windows</center> | <center>Ubuntu</center> |
+| --- | --- |
+| ![poster](./lib/windows.png) | ![poster](./lib/ubuntu.png) |
 
 여러 개의 엑셀(Excel) 파일을 열어 원하는 시트(Sheet)만 골라 하나의 파일로 손쉽게 합쳐주는 GUI 프로그램입니다. 반복적인 복사/붙여넣기 작업은 이제 그만! Excel Merger가 여러분의 작업을 효율적으로 만들어 드립니다.
 

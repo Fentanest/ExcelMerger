@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.building.datastruct import TOC
 
 a = Analysis(
@@ -16,29 +17,50 @@ a = Analysis(
     optimize=0,
 )
 
-# Exclude unwanted DLLs
-unwanted_binaries = {
-    'Qt6Qml.dll',
-    'Qt6Quick.dll',
-    'Qt6Pdf.dll',
-    'Qt6VirtualKeyboard.dll',
-    'opengl32sw.dll',
-    'Qt6OpenGL.dll',
-    'Qt6Svg.dll',
-    'qgif.dll',
-    'qicns.dll',
-    'qjpeg.dll',
-    'qpdf.dll',
-    'qtga.dll',
-    'qtiff.dll',
-    'qwbmp.dll',
-    'qwebp.dll',
-}
-a.binaries = TOC([
-    (name, path, typecode)
-    for name, path, typecode in a.binaries
-    if os.path.basename(path) not in unwanted_binaries
-])
+# Exclude unwanted binaries based on OS
+unwanted_binaries = set()
+if sys.platform == 'win32':
+    unwanted_binaries = {
+        'Qt6Qml.dll',
+        'Qt6Quick.dll',
+        'Qt6Pdf.dll',
+        'Qt6VirtualKeyboard.dll',
+        'opengl32sw.dll',
+        'Qt6OpenGL.dll',
+        'Qt6Svg.dll',
+        'qgif.dll',
+        'qicns.dll',
+        'qjpeg.dll',
+        'qpdf.dll',
+        'qtga.dll',
+        'qtiff.dll',
+        'qwbmp.dll',
+        'qwebp.dll',
+    }
+elif sys.platform == 'linux':
+    unwanted_binaries = {
+        'libQt6Qml.so.6',
+        'libQt6Quick.so.6',
+        'libQt6Pdf.so.6',
+        'libQt6VirtualKeyboard.so.6',
+        'libQt6OpenGL.so.6',
+        'libQt6Svg.so.6',
+        'libqgif.so',
+        'libqicns.so',
+        'libqjpeg.so',
+        'libqpdf.so',
+        'libqtga.so',
+        'libqtiff.so',
+        'libqwbmp.so',
+        'libqwebp.so',
+    }
+
+if unwanted_binaries:
+    a.binaries = TOC([
+        (name, path, typecode)
+        for name, path, typecode in a.binaries
+        if os.path.basename(path) not in unwanted_binaries
+    ])
 
 # Exclude translation files
 a.datas = TOC([
