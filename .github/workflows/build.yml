@@ -147,7 +147,7 @@ jobs:
     - name: Get version from version.py
       id: get_version
       run: |
-        versionString=$(grep -oP '__version__ = "\K[^"].+' version.py)
+        versionString=$(sed -n 's/.*__version__ = "\([^"].*\)".*/\1/p' version.py)
         if [ -z "$versionString" ]; then
           echo "::error::Could not find __version__ in version.py"
           exit 1
