@@ -17,6 +17,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 
+        clean: true
 
     - name: Get version from version.py
       id: get_version
@@ -134,6 +135,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        clean: true
 
     - name: Get version from version.py
       id: get_version
@@ -191,8 +193,7 @@ jobs:
           echo "Downloading UPX $VERSION from $DOWNLOAD_URL"
           wget -O "$TAR_PATH" "$DOWNLOAD_URL"
           mkdir -p "$UPX_DIR"
-          tar -xf "$TAR_PATH" -C /tmp
-          mv /tmp/upx-${VERSION}-amd64_linux/* "$UPX_DIR"/
+          tar -xf "$TAR_PATH" -C "$UPX_DIR" --strip-components=1
         fi
 
         if [ ! -f "$UPX_PATH" ]; then
