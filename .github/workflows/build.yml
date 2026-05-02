@@ -14,7 +14,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0 
 
@@ -61,7 +61,7 @@ jobs:
 
     - name: Set up Python
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.14'
 
@@ -114,14 +114,14 @@ jobs:
 
     - name: Upload Windows executable as an artifact
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ExcelMerger-Windows-${{ steps.get_version.outputs.version }}
         path: dist/ExcelMerger.exe
 
     - name: Create or Update GitHub Release with Windows asset
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v2.5.0
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         name: "ExcelMerger v${{ steps.get_version.outputs.version }}"
@@ -140,7 +140,7 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
@@ -183,7 +183,7 @@ jobs:
 
     - name: Set up Python
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.14'
 
@@ -232,14 +232,14 @@ jobs:
 
     - name: Upload Linux executable as an artifact
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ExcelMerger-Linux-${{ steps.get_version.outputs.version }}
         path: dist/ExcelMerger
 
     - name: Update GitHub Release with Linux asset
       if: steps.check_tag.outputs.tag_exists == 'false'
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v2.5.0
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         files: dist/ExcelMerger
