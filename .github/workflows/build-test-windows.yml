@@ -1,0 +1,100 @@
+name: Build Windows Test Executables
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.13"
+  JAVA_VERSION: "21"
+  POI_VERSION: "5.3.0"
+  XMLBEANS_VERSION: "5.2.1"
+  COMMONS_COLLECTIONS4_VERSION: "4.4"
+  COMMONS_IO_VERSION: "2.16.1"
+  COMMONS_COMPRESS_VERSION: "1.26.2"
+  COMMONS_CODEC_VERSION: "1.17.1"
+  LOG4J_API_VERSION: "2.24.1"
+
+jobs:
+  build-windows:
+    runs-on: [self-hosted, Windows, X64, 233]
+    strategy:
+      fail-fast: false
+      matrix:
+        include_jre: [false, true]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Get version
+        id: version
+        shell: powershell
+        run: |
+          $versionString = (Get-Content version.py -Raw) -match '__version__ = "(.+)"' | ForEach-Object { $matches[1] }
+          if (-not $versionString) { throw "version.py에서 __version__을 찾을 수 없습니다." }
+          echo "version=$versionString" >> $env:GITHUB_OUTPUT
+          if ("${{ matrix.include_jre }}" -eq "true") {
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64-jre.zip" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64.zip" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Install Python dependencies
+        shell: powershell
+        run: |
+          python -m venv venv
+          .\venv\Scripts\python.exe -m pip install --upgrade pip
+          .\venv\Scripts\pip.exe install -r requirements.txt pyinstaller
+
+      - name: Download Apache POI jars
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path lib\poi | Out-Null
+          $downloads = @(
+            "https://repo1.maven.org/maven2/org/apache/poi/poi/$env:POI_VERSION/poi-$env:POI_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/poi/poi-ooxml/$env:POI_VERSION/poi-ooxml-$env:POI_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/poi/poi-ooxml-lite/$env:POI_VERSION/poi-ooxml-lite-$env:POI_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/commons/commons-collections4/$env:COMMONS_COLLECTIONS4_VERSION/commons-collections4-$env:COMMONS_COLLECTIONS4_VERSION.jar",
+            "https://repo1.maven.org/maven2/commons-io/commons-io/$env:COMMONS_IO_VERSION/commons-io-$env:COMMONS_IO_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/commons/commons-compress/$env:COMMONS_COMPRESS_VERSION/commons-compress-$env:COMMONS_COMPRESS_VERSION.jar",
+            "https://repo1.maven.org/maven2/commons-codec/commons-codec/$env:COMMONS_CODEC_VERSION/commons-codec-$env:COMMONS_CODEC_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/xmlbeans/xmlbeans/$env:XMLBEANS_VERSION/xmlbeans-$env:XMLBEANS_VERSION.jar",
+            "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/$env:LOG4J_API_VERSION/log4j-api-$env:LOG4J_API_VERSION.jar"
+          )
+          foreach ($url in $downloads) {
+            $target = Join-Path "lib\poi" ([System.IO.Path]::GetFileName($url))
+            Invoke-WebRequest -Uri $url -OutFile $target
+          }
+
+      - name: Bundle JRE
+        if: matrix.include_jre
+        shell: powershell
+        run: |
+          Remove-Item -Recurse -Force lib\jre -ErrorAction SilentlyContinue
+          Copy-Item -Recurse -Force $env:JAVA_HOME lib\jre
+
+      - name: Build executable
+        shell: powershell
+        run: |
+          $env:EXCELMERGER_INCLUDE_JRE = if ("${{ matrix.include_jre }}" -eq "true") { "1" } else { "0" }
+          .\venv\Scripts\pyinstaller.exe ExcelMerger.spec
+
+      - name: Package artifact
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Compress-Archive -Path dist\ExcelMerger.exe -DestinationPath ("release\" + "${{ steps.version.outputs.asset }}") -Force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.asset }}
+          path: release/${{ steps.version.outputs.asset }}
