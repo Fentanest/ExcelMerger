@@ -9,8 +9,7 @@
 ├── main.py                       # 엔트리: from excelmerger import main
 ├── version.py                    # __version__ (CI가 sed로 읽음)
 ├── ExcelMerger.spec              # PyInstaller 스펙 (main.py로부터 의존성 추적)
-├── requirements.txt              # 런타임 의존성 (PySide6, JPype1, msoffcrypto-tool, pywin32)
-├── requirements-dev.txt          # 테스트 픽스처용 (openpyxl)
+├── requirements.txt              # 런타임 의존성 (PySide6, JPype1, msoffcrypto-tool, pywin32, openpyxl)
 ├── ui.sh                         # excelmerger/ui/forms/*.ui → *_ui.py 재생성
 ├── config.ini                    # 사용자 설정 (런타임 생성, 비추적)
 ├── README.md, CHANGELOG.md, CLAUDE.md, LICENSE
@@ -78,7 +77,7 @@
 
 ```bash
 python -m venv venv
-./venv/bin/pip install -r requirements-dev.txt
+./venv/bin/pip install -r requirements.txt
 ./venv/bin/python main.py                       # GUI 실행
 ./venv/bin/python -m unittest discover -s tests # 단위 테스트
 ./ui.sh                                         # .ui 수정 후 *_ui.py 재생성
