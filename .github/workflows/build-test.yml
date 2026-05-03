@@ -1,10 +1,7 @@
-name: Build Cross-Platform Executables
+name: Build Cross-Platform Test Executables
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 env:
   PYTHON_VERSION: "3.13"
@@ -46,9 +43,9 @@ jobs:
           if (-not $versionString) { throw "version.py에서 __version__을 찾을 수 없습니다." }
           echo "version=$versionString" >> $env:GITHUB_OUTPUT
           if ("${{ matrix.include_jre }}" -eq "true") {
-            echo "asset=ExcelMerger-$versionString-Windows-x64-jre.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64-jre.zip" >> $env:GITHUB_OUTPUT
           } else {
-            echo "asset=ExcelMerger-$versionString-Windows-x64.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64.zip" >> $env:GITHUB_OUTPUT
           }
 
       - name: Install Python dependencies
@@ -128,9 +125,9 @@ jobs:
           version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "${{ matrix.include_jre }}" = "true" ]; then
-            echo "asset=ExcelMerger-$version-Linux-x64-jre.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-Linux-x64-jre.tar.gz" >> "$GITHUB_OUTPUT"
           else
-            echo "asset=ExcelMerger-$version-Linux-x64.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-Linux-x64.tar.gz" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Python dependencies
@@ -193,9 +190,9 @@ jobs:
           version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "${{ matrix.include_jre }}" = "true" ]; then
-            echo "asset=ExcelMerger-$version-macOS-x64-jre.dmg" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-macOS-x64-jre.dmg" >> "$GITHUB_OUTPUT"
           else
-            echo "asset=ExcelMerger-$version-macOS-x64.dmg" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-macOS-x64.dmg" >> "$GITHUB_OUTPUT"
           fi
       - name: Install Python dependencies
         run: |
@@ -252,9 +249,9 @@ jobs:
           version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "${{ matrix.include_jre }}" = "true" ]; then
-            echo "asset=ExcelMerger-$version-macOS-arm64-jre.dmg" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-macOS-arm64-jre.dmg" >> "$GITHUB_OUTPUT"
           else
-            echo "asset=ExcelMerger-$version-macOS-arm64.dmg" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-macOS-arm64.dmg" >> "$GITHUB_OUTPUT"
           fi
       - name: Install Python dependencies
         run: |
@@ -289,33 +286,3 @@ jobs:
         with:
           name: ${{ steps.version.outputs.asset }}
           path: release/${{ steps.version.outputs.asset }}
-
-  release:
-    runs-on: ubuntu-latest
-    needs:
-      - build-windows
-      - build-linux
-      - build-macos-x64
-      - build-macos-arm64
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v6
-      - name: Get version
-        id: version
-        run: |
-          version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v6
-        with:
-          path: release
-      - name: Flatten release artifacts
-        run: |
-          mkdir -p upload
-          find release -type f -exec cp {} upload/ \;
-      - uses: softprops/action-gh-release@v2.5.0
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: ExcelMerger v${{ steps.version.outputs.version }}
-          files: upload/*
-          generate_release_notes: true

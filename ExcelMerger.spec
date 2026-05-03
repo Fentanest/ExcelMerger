@@ -3,11 +3,34 @@ import os
 import sys
 from PyInstaller.building.datastruct import TOC
 
+
+def collect_tree(source_root, target_root):
+    collected = []
+    if not os.path.isdir(source_root):
+        return collected
+
+    for root, _, files in os.walk(source_root):
+        relative_root = os.path.relpath(root, source_root)
+        destination_root = target_root if relative_root == "." else os.path.join(target_root, relative_root)
+        for file_name in files:
+            collected.append((os.path.join(root, file_name), destination_root))
+    return collected
+
+
+include_jre = os.environ.get("EXCELMERGER_INCLUDE_JRE") == "1"
+datas = [
+    ("lib/logo.png", "lib"),
+    ("lib/logo.ico", "lib"),
+]
+datas.extend(collect_tree("lib/poi", "lib/poi"))
+if include_jre:
+    datas.extend(collect_tree("lib/jre", "lib/jre"))
+
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('lib/logo.png', 'lib'), ('lib/logo.ico', 'lib')],
+    datas=datas,
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

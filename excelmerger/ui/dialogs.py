@@ -1,8 +1,9 @@
 from PySide6.QtWidgets import QDialog
-from password_ui import Ui_Dialog as Ui_PasswordDialog
-from globalpassword_ui import Ui_Dialog as Ui_GlobalPasswordDialog
-from encryption_ui import Ui_Dialog as Ui_EncryptionDialog
-from options_ui import Ui_Dialog as Ui_OptionsDialog
+
+from excelmerger.ui.encryption_ui import Ui_Dialog as Ui_EncryptionDialog
+from excelmerger.ui.globalpassword_ui import Ui_Dialog as Ui_GlobalPasswordDialog
+from excelmerger.ui.options_ui import Ui_Dialog as Ui_OptionsDialog
+from excelmerger.ui.password_ui import Ui_Dialog as Ui_PasswordDialog
 
 class PasswordDialog(QDialog, Ui_PasswordDialog):
     def __init__(self, file_name, parent=None):

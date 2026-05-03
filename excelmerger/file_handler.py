@@ -1,13 +1,27 @@
-import os
-import io
-import tempfile
-import msoffcrypto
-import openpyxl
-import xlrd
-from dialogs import PasswordDialog
-import sys
 import csv
-from pyxlsb import open_workbook as open_xlsb
+import io
+import os
+import sys
+import tempfile
+
+import msoffcrypto
+
+from excelmerger.ui.dialogs import PasswordDialog
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
+try:
+    import xlrd
+except ImportError:
+    xlrd = None
+
+try:
+    from pyxlsb import open_workbook as open_xlsb
+except ImportError:
+    open_xlsb = None
 
 class FileHandler:
     def __init__(self, main_window):
@@ -17,12 +31,20 @@ class FileHandler:
         try:
             lower_path = file_path.lower()
             if lower_path.endswith('.xlsx'):
+                if openpyxl is None:
+                    raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
                 return openpyxl.load_workbook(file_path, read_only=False, data_only=data_only)
             elif lower_path.endswith('.xlsm'):
+                if openpyxl is None:
+                    raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
                 return openpyxl.load_workbook(file_path, read_only=False, keep_vba=True, data_only=data_only)
             elif lower_path.endswith('.xls'):
+                if xlrd is None:
+                    raise RuntimeError("xlrd가 설치되어 있지 않습니다.")
                 return xlrd.open_workbook(file_path, formatting_info=True)
             elif lower_path.endswith('.xlsb'):
+                if open_xlsb is None or openpyxl is None:
+                    raise RuntimeError("pyxlsb 또는 openpyxl이 설치되어 있지 않습니다.")
                 self.main_window.txtLogOutput.append(f"표준 병합을 위해 .xlsb 파일을 변환 중: {file_name}")
                 with open_xlsb(file_path) as wb_xlsb:
                     wb_xlsx = openpyxl.Workbook()
@@ -55,17 +77,31 @@ class FileHandler:
         return None
 
     def convert_to_xlsx(self, file_path):
-        """Converts various Excel formats to XLSX, returns path to new file."""
         file_name = os.path.basename(file_path)
         lower_file_path = file_path.lower()
 
-        # High-quality conversion for .xls, .xlsb, .xlsm on Windows
-        if sys.platform == 'win32' and self.main_window.merger_win32.win32 and lower_file_path.endswith(('.xls', '.xlsb', '.xlsm')):
+        if sys.platform == 'win32' and self.main_window.merger_win32.win32 and lower_file_path.endswith(('.xls', '.xlsb')):
             return self.main_window.merger_win32.convert_to_xlsx_win32(file_path)
 
-        # CSV to XLSX conversion (all platforms)
+        merger_poi = getattr(self.main_window, 'merger_poi', None)
+        if (
+            merger_poi is not None
+            and merger_poi.is_available()
+            and lower_file_path.endswith(('.xls', '.xlsb', '.xlsm', '.csv'))
+        ):
+            try:
+                self.main_window.txtLogOutput.append(f"POI로 .xlsx 변환 중: {file_name}")
+                xlsx_path = merger_poi.convert_to_xlsx(file_path)
+                if xlsx_path:
+                    self.main_window.temp_files.append(xlsx_path)
+                    return xlsx_path
+            except Exception as exc:
+                self.main_window.txtLogOutput.append(f"POI 변환 실패, openpyxl 폴백 시도: {exc}")
+
         if lower_file_path.endswith('.csv'):
             try:
+                if openpyxl is None:
+                    raise RuntimeError("CSV 변환에 필요한 openpyxl이 설치되어 있지 않습니다.")
                 self.main_window.txtLogOutput.append(f".csv 파일을 .xlsx로 변환 중: {file_name}")
                 wb = openpyxl.Workbook()
                 ws = wb.active
@@ -90,13 +126,13 @@ class FileHandler:
                 self.main_window.txtLogOutput.append(f".csv to .xlsx 변환 오류: {e}")
                 return None
 
-        # Non-Win32 conversions
         try:
             fd, xlsx_path = tempfile.mkstemp(suffix='.xlsx', prefix='converted_')
             os.close(fd)
             
-            # .xlsb to .xlsx
             if lower_file_path.endswith('.xlsb'):
+                if open_xlsb is None or openpyxl is None:
+                    raise RuntimeError("pyxlsb 또는 openpyxl이 설치되어 있지 않습니다.")
                 self.main_window.txtLogOutput.append(f".xlsb 파일을 .xlsx로 변환 중: {file_name}")
                 with open_xlsb(file_path) as wb_xlsb:
                     wb_xlsx = openpyxl.Workbook()
@@ -110,16 +146,18 @@ class FileHandler:
                 self.main_window.temp_files.append(xlsx_path)
                 return xlsx_path
 
-            # .xlsm to .xlsx
             elif lower_file_path.endswith('.xlsm'):
+                if openpyxl is None:
+                    raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
                 self.main_window.txtLogOutput.append(f".xlsm 파일을 .xlsx로 변환 중 (VBA 제외): {file_name}")
-                wb = openpyxl.load_workbook(file_path, data_only=True) # data_only to avoid formula issues, removed read_only=True
+                wb = openpyxl.load_workbook(file_path, data_only=True)
                 wb.save(xlsx_path)
                 self.main_window.temp_files.append(xlsx_path)
                 return xlsx_path
 
-            # .xls to .xlsx
             elif lower_file_path.endswith('.xls'):
+                if xlrd is None or openpyxl is None:
+                    raise RuntimeError("xlrd 또는 openpyxl이 설치되어 있지 않습니다.")
                 self.main_window.txtLogOutput.append(f".xls 파일을 .xlsx로 변환 중: {file_name}")
                 wb_xls = xlrd.open_workbook(file_path)
                 wb_xlsx = openpyxl.Workbook()
@@ -136,14 +174,13 @@ class FileHandler:
             self.main_window.txtLogOutput.append(f"파일 변환 오류 ({file_name}): {e}")
             return None
         
-        return file_path # Should not be reached if conversion was needed
+        return file_path
 
     def get_sheet_names(self, file_path):
         file_name = os.path.basename(file_path)
         processed_file_path = file_path
         file_ext = os.path.splitext(file_name)[1].lower()
 
-        # 1. Handle Encryption
         if file_ext in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
             is_encrypted = False
             try:
@@ -162,28 +199,49 @@ class FileHandler:
                     self.main_window.txtLogOutput.append(f"파일을 열 수 없습니다 (암호화 문제 또는 사용자 취소): {file_name}")
                     return None, None
 
-        # 2. Get sheet names using Python libraries
         self.main_window.txtLogOutput.append(f"시트 목록 읽기: {file_name}")
         try:
             lower_path = processed_file_path.lower()
+            if lower_path.endswith('.csv'):
+                return [os.path.splitext(file_name)[0]], processed_file_path
+
+            if lower_path.endswith('.xlsb'):
+                converted_path = self.convert_to_xlsx(processed_file_path)
+                if not converted_path:
+                    return None, None
+                processed_file_path = converted_path
+                lower_path = processed_file_path.lower()
+
+            if hasattr(self.main_window, 'merger_poi') and self.main_window.merger_poi.is_available():
+                try:
+                    return self.main_window.merger_poi.get_sheet_names(processed_file_path), processed_file_path
+                except Exception as exc:
+                    self.main_window.txtLogOutput.append(f"JPype 시트 목록 읽기 실패, 표준 모드로 전환합니다: {exc}")
+
             if lower_path.endswith('.xlsm'):
+                if openpyxl is None:
+                    raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
                 wb = openpyxl.load_workbook(processed_file_path, read_only=False, keep_vba=True, data_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()
                 return sheet_names, processed_file_path
             elif lower_path.endswith('.xlsx'):
+                if openpyxl is None:
+                    raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
                 wb = openpyxl.load_workbook(processed_file_path, read_only=True, data_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()
                 return sheet_names, processed_file_path
             elif lower_path.endswith('.xls'):
+                if xlrd is None:
+                    raise RuntimeError("xlrd가 설치되어 있지 않습니다.")
                 wb = xlrd.open_workbook(processed_file_path, on_demand=True)
                 return wb.sheet_names(), processed_file_path
             elif lower_path.endswith('.xlsb'):
+                if open_xlsb is None:
+                    raise RuntimeError("pyxlsb가 설치되어 있지 않습니다.")
                 with open_xlsb(processed_file_path) as wb:
                     return wb.sheets, processed_file_path
-            elif lower_path.endswith('.csv'):
-                return [os.path.splitext(file_name)[0]], processed_file_path
             else:
                 self.main_window.txtLogOutput.append(f"지원하지 않는 파일 형식입니다: {file_name}")
                 return None, None
