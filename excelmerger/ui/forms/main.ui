@@ -589,8 +589,6 @@ border: 2px solid white;
     <property name="title">
      <string>옵션</string>
     </property>
-    <addaction name="actionSetGlobalPassword"/>
-    <addaction name="actionSetOutputEncryption"/>
     <addaction name="actionOptions"/>
     <addaction name="actionActivateDebugMode"/>
     <addaction name="actionWin32"/>
@@ -632,28 +630,6 @@ border: 2px solid white;
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
-   </property>
-  </action>
-  <action name="actionSetGlobalPassword">
-   <property name="icon">
-    <iconset theme="QIcon::ThemeIcon::SystemLockScreen"/>
-   </property>
-   <property name="text">
-    <string>전역 비밀번호 설정</string>
-   </property>
-   <property name="shortcut">
-    <string>Alt+P</string>
-   </property>
-  </action>
-  <action name="actionSetOutputEncryption">
-   <property name="icon">
-    <iconset theme="QIcon::ThemeIcon::DialogWarning"/>
-   </property>
-   <property name="text">
-    <string>출력파일 암호화 설정</string>
-   </property>
-   <property name="shortcut">
-    <string>Alt+C</string>
    </property>
   </action>
   <action name="actionOptions">

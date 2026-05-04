@@ -29,7 +29,7 @@ from excelmerger.engines.win32 import MergerWin32
 from excelmerger.file_handler import FileHandler
 from excelmerger.runtime_paths import resource_path
 from excelmerger.settings import SettingsManager
-from excelmerger.ui.dialogs import EncryptionDialog, GlobalPasswordDialog, OptionsDialog
+from excelmerger.ui.dialogs import OptionsDialog
 from excelmerger.ui.main_ui import Ui_MainWindow
 from excelmerger.updater import apply_update, check_for_update
 from version import __version__
@@ -120,8 +120,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _connect_signals(self):
         self.actionAddExcelFile.triggered.connect(self.add_excel_file)
         self.actionSetSavePath.triggered.connect(self.browse_save_path)
-        self.actionSetGlobalPassword.triggered.connect(self.open_global_password_dialog)
-        self.actionSetOutputEncryption.triggered.connect(self.open_encryption_dialog)
         self.actionOptions.triggered.connect(self.open_options_dialog)
         self.actionVisitBlog.triggered.connect(self.open_blog)
         self.actionActivateDebugMode.toggled.connect(self.on_debug_mode_toggled)
@@ -335,34 +333,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         }
         self.settings_manager.save_settings(settings)
 
-    def open_global_password_dialog(self):
-        dialog = GlobalPasswordDialog(self)
-        dialog.setWindowIcon(self.windowIcon())
-        dialog.chkGlobalPassword.setChecked(self.use_global_password)
-        dialog.lineEditGlobalPassword.setText(self.global_password)
-        dialog.lineEditGlobalPassword.setEnabled(self.use_global_password)
-        dialog.chkGlobalPassword.toggled.connect(dialog.lineEditGlobalPassword.setEnabled)
-
-        if dialog.exec():
-            self.use_global_password = dialog.chkGlobalPassword.isChecked()
-            self.global_password = dialog.lineEditGlobalPassword.text() if self.use_global_password else ""
-            self.gather_and_save_settings()
-            self.txtLogOutput.append("전역 비밀번호 설정이 업데이트되었습니다.")
-
-    def open_encryption_dialog(self):
-        dialog = EncryptionDialog(self)
-        dialog.setWindowIcon(self.windowIcon())
-        dialog.chkEnablePassword.setChecked(self.encrypt_output)
-        dialog.lineEditPassword.setText(self.output_encryption_password)
-        dialog.lineEditPassword.setEnabled(self.encrypt_output)
-        dialog.chkEnablePassword.toggled.connect(dialog.lineEditPassword.setEnabled)
-
-        if dialog.exec():
-            self.encrypt_output = dialog.chkEnablePassword.isChecked()
-            self.output_encryption_password = dialog.lineEditPassword.text() if self.encrypt_output else ""
-            self.gather_and_save_settings()
-            self.txtLogOutput.append("출력 파일 암호화 설정이 업데이트되었습니다.")
-
     def open_options_dialog(self):
         # Refresh detection so options reflect current runtime availability.
         self.detect_merge_engines()
@@ -375,14 +345,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "sheet_trim_cols": self.options.get("sheet_trim_cols", False),
             "merge_engine": self.options.get("merge_engine", "auto"),
         }
+        security_for_dialog = {
+            "use_global_password": self.use_global_password,
+            "global_password": self.global_password,
+            "encrypt_output": self.encrypt_output,
+            "output_encryption_password": self.output_encryption_password,
+        }
         dialog = OptionsDialog(
             self,
             current_options=options_for_dialog,
             engine_status=self.engine_status,
+            security=security_for_dialog,
         )
         dialog.setWindowIcon(self.windowIcon())
         if dialog.exec():
             updated = dialog.get_options()
+            security_updated = dialog.get_security()
             previous_engine = self.options.get("merge_engine", "auto")
             new_engine = updated.get("merge_engine", "auto")
 
@@ -392,6 +370,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.options["sheet_trim_rows"] = updated.get("sheet_trim_rows", False)
             self.options["sheet_trim_cols"] = updated.get("sheet_trim_cols", False)
             self.options["merge_engine"] = new_engine
+
+            self.use_global_password = security_updated["use_global_password"]
+            self.global_password = security_updated["global_password"]
+            self.encrypt_output = security_updated["encrypt_output"]
+            self.output_encryption_password = security_updated["output_encryption_password"]
 
             self.txtLogOutput.append("옵션이 업데이트되었습니다.")
             if new_engine != previous_engine:

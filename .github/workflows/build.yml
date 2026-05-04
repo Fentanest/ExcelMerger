@@ -69,9 +69,9 @@ jobs:
           if (-not $versionString) { throw "version.py에서 __version__을 찾을 수 없습니다." }
           echo "version=$versionString" >> $env:GITHUB_OUTPUT
           if ("${{ matrix.include_jre }}" -eq "true") {
-            echo "asset=ExcelMerger-$versionString-Windows-x64-jre.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-$versionString-Windows-x64-jre" >> $env:GITHUB_OUTPUT
           } else {
-            echo "asset=ExcelMerger-$versionString-Windows-x64.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-$versionString-Windows-x64" >> $env:GITHUB_OUTPUT
           }
 
       - name: Install Python dependencies
@@ -128,42 +128,27 @@ jobs:
           $env:EXCELMERGER_INCLUDE_JRE = if ("${{ matrix.include_jre }}" -eq "true") { "1" } else { "0" }
           .\venv\Scripts\pyinstaller.exe ExcelMerger.spec
 
-      - name: Package artifact
+      - name: Wait for build artifacts to release
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          $src = "dist\ExcelMerger.exe"
-          $dst = "release\${{ steps.version.outputs.asset }}"
           # PyInstaller/UPX/Defender may briefly hold the new .exe; wait for the handle to release.
+          $exe = "dist\ExcelMerger\ExcelMerger.exe"
           $deadline = (Get-Date).AddSeconds(120)
-          $released = $false
           while ((Get-Date) -lt $deadline) {
             try {
-              $fh = [System.IO.File]::Open($src, 'Open', 'Read', 'None')
+              $fh = [System.IO.File]::Open($exe, 'Open', 'Read', 'None')
               $fh.Dispose()
-              $released = $true
               break
             } catch {
-              Write-Host "Waiting for $src to be released..."
+              Write-Host "Waiting for $exe to be released..."
               Start-Sleep -Seconds 3
             }
           }
-          if (-not $released) {
-            Write-Warning "File still appears locked after 120s; attempting Compress-Archive anyway."
-          }
-          # Robocopy to a staging dir that copies even when source is briefly contested, then archive.
-          $staging = Join-Path $env:RUNNER_TEMP ("pkg-" + [guid]::NewGuid().ToString())
-          New-Item -ItemType Directory -Force -Path $staging | Out-Null
-          robocopy "dist" $staging "ExcelMerger.exe" /R:5 /W:3 /NJH /NJS /NFL /NDL | Out-Null
-          if (-not (Test-Path (Join-Path $staging "ExcelMerger.exe"))) {
-            throw "Failed to stage ExcelMerger.exe for packaging."
-          }
-          Compress-Archive -Path (Join-Path $staging "ExcelMerger.exe") -DestinationPath $dst -Force
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.asset }}
-          path: release/${{ steps.version.outputs.asset }}
+          path: dist/ExcelMerger/
 
   build-linux:
     needs: check-version
@@ -193,9 +178,9 @@ jobs:
           version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "${{ matrix.include_jre }}" = "true" ]; then
-            echo "asset=ExcelMerger-$version-Linux-x64-jre.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-$version-Linux-x64-jre" >> "$GITHUB_OUTPUT"
           else
-            echo "asset=ExcelMerger-$version-Linux-x64.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-$version-Linux-x64" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Python dependencies
@@ -242,15 +227,10 @@ jobs:
         run: |
           EXCELMERGER_INCLUDE_JRE=${{ matrix.include_jre && '1' || '0' }} ./venv/bin/pyinstaller ExcelMerger.spec
 
-      - name: Package artifact
-        run: |
-          mkdir -p release
-          tar -czf "release/${{ steps.version.outputs.asset }}" -C dist ExcelMerger
-
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.asset }}
-          path: release/${{ steps.version.outputs.asset }}
+          path: dist/ExcelMerger/
 
   build-macos-x64:
     needs: check-version
@@ -422,11 +402,29 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v6
         with:
-          path: release
-      - name: Flatten release artifacts
+          path: artifacts
+      - name: Repackage artifacts (zip for Windows, tar.gz for Linux, pass-through DMG)
         run: |
           mkdir -p upload
-          find release -type f -exec cp {} upload/ \;
+          cd artifacts
+          for entry in */; do
+            name="${entry%/}"
+            case "$name" in
+              *Windows*)
+                (cd "$name" && zip -r -q "$GITHUB_WORKSPACE/upload/${name}.zip" .)
+                ;;
+              *Linux*)
+                tar -czf "$GITHUB_WORKSPACE/upload/${name}.tar.gz" -C "$name" .
+                ;;
+              *macOS*.dmg)
+                find "$name" -type f -name '*.dmg' -exec cp {} "$GITHUB_WORKSPACE/upload/" \;
+                ;;
+              *)
+                echo "Unknown artifact shape: $name" >&2
+                ;;
+            esac
+          done
+          ls -la "$GITHUB_WORKSPACE/upload"
       - uses: softprops/action-gh-release@v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}

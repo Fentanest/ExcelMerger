@@ -32,11 +32,23 @@
 │   │   ├── poi.py                # JPype + Apache POI 엔진 (기본 권장)
 │   │   └── win32.py              # Windows COM Excel 엔진
 │   └── ui/
-│       ├── dialogs.py            # 비밀번호/암호화/옵션 다이얼로그
+│       ├── dialogs.py            # PasswordDialog(파일 암호 해제) + OptionsDialog(통합 환경설정)
 │       ├── *_ui.py               # pyside6-uic 자동 생성 (편집 금지)
-│       └── forms/*.ui            # Qt Designer 원본
+│       └── forms/*.ui            # Qt Designer 원본 (main, options, password)
 └── tests/                        # unittest (단위 + POI 통합)
 ```
+
+## 옵션 다이얼로그 구조
+
+`OptionsDialog`(360×625)가 메뉴의 단일 환경설정 진입점이며, 위→아래로 5개 그룹을 가짐:
+
+1. **시트 이름 규칙** — OriginalBoth / OriginalSheet / OriginalFileName
+2. **병합 방식** — 시트별 / 가로 / 세로
+3. **데이터 정리** — N줄 이상 빈 행/열 제거
+4. **전역 비밀번호 / 출력 암호화** — 입력 파일 일괄 복호화 비밀번호 + 출력 파일 암호화 비밀번호 (2개 체크박스 + 비밀번호 입력)
+5. **병합 엔진** — 자동/Excel/LibreOffice/Java/Python (아래 표 참조)
+
+`MainWindow.open_options_dialog()`가 다이얼로그에 `engine_status`, `current_options`, `security`(전역 비밀번호 + 출력 암호화 상태)를 모두 전달하고, `dialog.get_options()` + `dialog.get_security()`로 결과를 회수해 한 번에 반영.
 
 ## 엔진 아키텍처
 
@@ -78,10 +90,15 @@ options.merge_engine == 특정 엔진
 
 ## 빌드 / 패키징
 
-- PyInstaller가 `main.py`로부터 정적 import 추적으로 `excelmerger.*`를 모두 수집.
+- PyInstaller는 **onedir 모드**로 빌드 (`EXE(exclude_binaries=True) + COLLECT`). 산출물은 `dist/ExcelMerger/` 디렉터리(실행파일 + `_internal/` 라이브러리). onefile은 사용하지 않음.
 - `ExcelMerger.spec`은 `EXCELMERGER_INCLUDE_JRE=1` 환경변수로 `lib/jre`를 datas에 조건부 포함.
-- CI(`.github/workflows/build.yml`, `build-test.yml`)는 4 플랫폼 × `include_jre: [false, true]` = 8 산출물을 생성. `build.yml`만 GitHub Release에 업로드, `build-test.yml`은 수동 dispatch용.
+- CI 산출물 흐름 (`.github/workflows/build.yml`, `build-test.yml`):
+  - **build-windows / build-linux**: `dist/ExcelMerger/` 폴더를 그대로 `actions/upload-artifact`로 업로드 (확장자 없는 이름). 사전 zip 단계 없음 → 다운로드 시 GitHub의 자동 zip 래핑 1회만 적용되어 zip-in-zip 미발생.
+  - **build-macos-x64 / build-macos-arm64**: `hdiutil`로 DMG 생성 후 단일 파일로 업로드.
+  - **release** (build.yml만): 모든 아티팩트 다운로드 후 플랫폼 패턴으로 재포장 — Windows는 `zip -r`, Linux는 `tar -czf`, macOS는 DMG 패스스루. 4 플랫폼 × `include_jre` 매트릭스 = 8 산출물.
 - 각 빌드 잡은 PyInstaller 실행 직전에 UPX 5.1.1을 설치 (Windows: GitHub release zip, Linux: amd64_linux tar.xz, macOS: `brew install upx`). `ExcelMerger.spec`의 `upx=True`가 PATH의 upx를 사용해 실행 파일을 압축.
+- Windows 잡은 PyInstaller 직후 `dist/ExcelMerger/ExcelMerger.exe`의 핸들이 풀릴 때까지 최대 120초 폴링 (Defender/UPX/PyInstaller 후처리 잠금 회피).
+- `updater.py`는 onedir 번들을 인지: `sys._MEIPASS == sys.executable의 부모`인지 확인하여 `target_info.type = "bundle"`로 분기, Windows는 `robocopy /MIR`, Linux는 `rm -rf + cp -R`로 디렉터리 통째 교체.
 - 검증 베이스라인: Python 3.13 + JPype1 1.6.0 + OpenJDK 17/21. JPype 1.7.0은 JVM 충돌 이슈로 회피.
 
 ## 개발 워크플로

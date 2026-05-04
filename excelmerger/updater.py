@@ -110,6 +110,25 @@ def _current_install_target():
                     "basename": parent.name,
                 }
 
+    # PyInstaller onedir: sys._MEIPASS == directory containing the executable.
+    # In that case the install target is the whole bundle directory, not a single binary.
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        try:
+            same_dir = Path(meipass).resolve() == executable_path.parent.resolve()
+        except OSError:
+            same_dir = False
+        if same_dir:
+            bundle_dir = executable_path.parent
+            return {
+                "type": "bundle",
+                "path": str(bundle_dir),
+                "executable": str(executable_path),
+                "launch": f'"{executable_path}"',
+                "basename": executable_path.name,
+                "bundle_name": bundle_dir.name,
+            }
+
     return {
         "type": "binary",
         "path": str(executable_path),
@@ -118,9 +137,22 @@ def _current_install_target():
     }
 
 
-def _find_payload(root_dir, basename):
+def _find_payload(root_dir, target_info):
     root_path = Path(root_dir)
 
+    if target_info["type"] == "bundle":
+        # The downloaded archive should contain the executable somewhere; the bundle
+        # is the directory holding it. Return the parent directory of the executable.
+        basename = target_info["basename"]
+        for candidate in root_path.rglob(basename):
+            if candidate.is_file():
+                return str(candidate.parent)
+        # Fallback: the archive may flatten everything at root.
+        if (root_path / basename).exists():
+            return str(root_path)
+        return ""
+
+    basename = target_info["basename"]
     exact_match = root_path / basename
     if exact_match.exists():
         return str(exact_match)
@@ -148,13 +180,13 @@ def _extract_downloaded_asset(asset_path, asset_name, target_info, progress_call
         with zipfile.ZipFile(asset_path, "r") as archive:
             archive.extractall(extract_dir)
         _report_progress(progress_callback, 92, "업데이트 압축 해제 중...")
-        return _find_payload(extract_dir, target_info["basename"])
+        return _find_payload(extract_dir, target_info)
 
     if lower_name.endswith(".tar.gz"):
         with tarfile.open(asset_path, "r:gz") as archive:
             archive.extractall(extract_dir)
         _report_progress(progress_callback, 92, "업데이트 압축 해제 중...")
-        return _find_payload(extract_dir, target_info["basename"])
+        return _find_payload(extract_dir, target_info)
 
     if lower_name.endswith(".dmg"):
         return asset_path
@@ -190,6 +222,20 @@ def _launch_script(script_path):
 
 def _prepare_windows_update(payload_path, target_info, work_dir):
     script_path = os.path.join(work_dir, "apply_update.cmd")
+
+    if target_info["type"] == "bundle":
+        launch_path = os.path.join(target_info["path"], target_info["basename"])
+        install_block = (
+            f'robocopy "%SOURCE%" "%TARGET%" /MIR /R:5 /W:3 >NUL\n'
+            f'if errorlevel 8 ( echo Robocopy failed with code %errorlevel% & exit /b 1 )\n'
+            f'start "" "{launch_path}"\n'
+        )
+    else:
+        install_block = (
+            'copy /Y "%SOURCE%" "%TARGET%" >NUL\n'
+            'start "" "%TARGET%"\n'
+        )
+
     script = f"""@echo off
 setlocal
 set "PID={os.getpid()}"
@@ -203,9 +249,7 @@ if not errorlevel 1 (
   goto waitloop
 )
 
-copy /Y "%SOURCE%" "%TARGET%" >NUL
-start "" "%TARGET%"
-del "%~f0"
+{install_block}del "%~f0"
 """
     _write_script(script_path, script)
     return script_path
@@ -213,6 +257,23 @@ del "%~f0"
 
 def _prepare_linux_update(payload_path, target_info, work_dir):
     script_path = os.path.join(work_dir, "apply_update.sh")
+
+    if target_info["type"] == "bundle":
+        launch_path = os.path.join(target_info["path"], target_info["basename"])
+        install_block = (
+            f'rm -rf "{target_info["path"]}"\n'
+            f'mkdir -p "{target_info["path"]}"\n'
+            f'cp -R "$SOURCE"/. "{target_info["path"]}/"\n'
+            f'chmod +x "{launch_path}" 2>/dev/null || true\n'
+            f'nohup "{launch_path}" >/dev/null 2>&1 &\n'
+        )
+    else:
+        install_block = (
+            'cp "$SOURCE" "$TARGET"\n'
+            'chmod +x "$TARGET"\n'
+            'nohup "$TARGET" >/dev/null 2>&1 &\n'
+        )
+
     script = f"""#!/bin/sh
 set -eu
 PID="{os.getpid()}"
@@ -223,10 +284,7 @@ while kill -0 "$PID" 2>/dev/null; do
   sleep 1
 done
 
-cp "$SOURCE" "$TARGET"
-chmod +x "$TARGET"
-nohup "$TARGET" >/dev/null 2>&1 &
-rm -- "$0"
+{install_block}rm -- "$0"
 """
     _write_script(script_path, script)
     return script_path

@@ -24,9 +24,9 @@ class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
-        Dialog.resize(340, 310)
-        Dialog.setMinimumSize(QSize(340, 310))
-        Dialog.setMaximumSize(QSize(340, 310))
+        Dialog.resize(360, 625)
+        Dialog.setMinimumSize(QSize(360, 625))
+        Dialog.setMaximumSize(QSize(360, 625))
         font = QFont()
         font.setFamilies([u"Noto Sans"])
         font.setPointSize(9)
