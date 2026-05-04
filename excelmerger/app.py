@@ -706,7 +706,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         self.detect_merge_engines()
-        self.apply_engine_selector_state()
 
         try:
             merge_type = self.options.get("merge_type", "Sheet")
