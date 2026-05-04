@@ -2,9 +2,9 @@ name: Build Cross-Platform Executables
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
 
 env:
   PYTHON_VERSION: "3.13"
