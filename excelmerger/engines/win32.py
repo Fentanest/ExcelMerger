@@ -1,15 +1,33 @@
 import os
 import tempfile
 import time
-
-from PySide6.QtWidgets import QApplication
-
 from excelmerger.engines.utils import build_output_sheet_name, has_macro_source
 
 class MergerWin32:
-    def __init__(self, main_window, win32):
+    def __init__(self, main_window=None, win32=None, log_callback=None, progress_callback=None, status_callback=None):
         self.main_window = main_window
         self.win32 = win32
+        self.log_callback = log_callback
+        self.progress_callback = progress_callback
+        self.status_callback = status_callback
+
+    def _log(self, message):
+        if self.log_callback:
+            self.log_callback(message)
+        elif self.main_window and hasattr(self.main_window, "txtLogOutput"):
+            self.main_window.txtLogOutput.append(message)
+
+    def _progress(self, percent):
+        if self.progress_callback:
+            self.progress_callback(percent)
+        elif self.main_window and hasattr(self.main_window, "progressBar"):
+            self.main_window.progressBar.setValue(percent)
+
+    def _status(self, text):
+        if self.status_callback:
+            self.status_callback(text)
+        elif self.main_window and hasattr(self.main_window, "lblCurrentFile"):
+            self.main_window.lblCurrentFile.setText(text)
 
     def convert_to_xlsx_win32(self, file_path, excel_instance=None):
         if not self.win32:
@@ -72,8 +90,7 @@ class MergerWin32:
             total_sheets = len(sheets_to_merge)
             for i, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split('/', 1)
-                self.main_window.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
+                self._status(f'{item} 병합 중 (고품질 모드)...')
 
                 info = self.main_window.file_info.get(file_name)
                 if not info:
@@ -108,8 +125,7 @@ class MergerWin32:
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 복사 오류 (win32) {item}: {e}")
                 
-                self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((i + 1) / total_sheets * 100))
 
             # Delete the default sheet that was created with the new workbook
             if merged_workbook.Worksheets.Count > 1:
@@ -151,8 +167,7 @@ class MergerWin32:
             last_pos = 0
             for i, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split('/', 1)
-                self.main_window.lblCurrentFile.setText(f'{item} 병합 중 (고품질 모드)...')
-                QApplication.processEvents()
+                self._status(f'{item} 병합 중 (고품질 모드)...')
 
                 info = self.main_window.file_info.get(file_name)
                 if not info:
@@ -184,8 +199,7 @@ class MergerWin32:
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
                 
-                self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((i + 1) / total_sheets * 100))
 
             if self.main_window.options['only_value_copy']:
                 self.main_window.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")

@@ -17,19 +17,27 @@ from excelmerger.runtime_paths import bundled_java_home, poi_jar_dir
 
 
 class MergerPOI:
-    def __init__(self, main_window=None):
+    def __init__(self, main_window=None, log_callback=None, progress_callback=None):
         self.main_window = main_window
+        self.log_callback = log_callback
+        self.progress_callback = progress_callback
         self._jpype = None
         self._WorkbookFactory = None
         self._XSSFWorkbook = None
         self._CellRangeAddress = None
-        self._FileInputStream = None
-        self._BufferedInputStream = None
-        self._FileOutputStream = None
+        self._File = None
 
     def _log(self, message):
-        if self.main_window and hasattr(self.main_window, "txtLogOutput"):
+        if self.log_callback:
+            self.log_callback(message)
+        elif self.main_window and hasattr(self.main_window, "txtLogOutput"):
             self.main_window.txtLogOutput.append(message)
+
+    def _progress(self, percent):
+        if self.progress_callback:
+            self.progress_callback(percent)
+        elif self.main_window and hasattr(self.main_window, "progressBar"):
+            self.main_window.progressBar.setValue(percent)
 
     def is_available(self):
         return detect_jpype()["available"]
@@ -73,8 +81,7 @@ class MergerPOI:
         self._WorkbookFactory = JClass("org.apache.poi.ss.usermodel.WorkbookFactory")
         self._XSSFWorkbook = JClass("org.apache.poi.xssf.usermodel.XSSFWorkbook")
         self._CellRangeAddress = JClass("org.apache.poi.ss.util.CellRangeAddress")
-        self._FileInputStream = JClass("java.io.FileInputStream")
-        self._BufferedInputStream = JClass("java.io.BufferedInputStream")
+        self._File = JClass("java.io.File")
         self._FileOutputStream = JClass("java.io.FileOutputStream")
 
     def _close_quietly(self, *objects):
@@ -85,10 +92,10 @@ class MergerPOI:
 
     def _open_workbook(self, file_path):
         self._ensure_jvm()
-        file_stream = self._FileInputStream(file_path)
-        buffered_stream = self._BufferedInputStream(file_stream)
-        workbook = self._WorkbookFactory.create(buffered_stream)
-        return workbook, buffered_stream, file_stream
+        java_file = self._File(file_path)
+        # WorkbookFactory.create(File file, String password, boolean readOnly)
+        workbook = self._WorkbookFactory.create(java_file, None, True)
+        return workbook, None, None
 
     def get_sheet_names(self, file_path):
         lower_path = file_path.lower()
@@ -145,8 +152,7 @@ class MergerPOI:
                         self._close_quietly(source_workbook, buffered_stream, file_stream)
 
                 existing_names.add(new_sheet_name)
-                self.main_window.progressBar.setValue(int((index + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((index + 1) / total_sheets * 100))
 
             self._perform_sheet_trim(output_workbook)
             self._save_workbook(output_workbook, save_path)
@@ -206,8 +212,7 @@ class MergerPOI:
                 else:
                     next_row += rows_used
 
-                self.main_window.progressBar.setValue(int((index + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((index + 1) / total_sheets * 100))
 
             self._perform_sheet_trim(output_workbook)
             self._save_workbook(output_workbook, save_path)

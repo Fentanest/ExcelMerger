@@ -3,8 +3,6 @@ import subprocess
 import time
 from contextlib import suppress
 
-from PySide6.QtWidgets import QApplication
-
 from excelmerger.engines.detector import detect_libreoffice
 from excelmerger.engines.utils import build_output_sheet_name
 
@@ -16,13 +14,30 @@ def _import_uno():
 
 
 class MergerLibre:
-    def __init__(self, main_window):
+    def __init__(self, main_window=None, log_callback=None, progress_callback=None, status_callback=None):
         self.main_window = main_window
+        self.log_callback = log_callback
+        self.progress_callback = progress_callback
+        self.status_callback = status_callback
         self._started_process = None
 
     def _log(self, message):
-        if self.main_window and hasattr(self.main_window, "txtLogOutput"):
+        if self.log_callback:
+            self.log_callback(message)
+        elif self.main_window and hasattr(self.main_window, "txtLogOutput"):
             self.main_window.txtLogOutput.append(message)
+
+    def _progress(self, percent):
+        if self.progress_callback:
+            self.progress_callback(percent)
+        elif self.main_window and hasattr(self.main_window, "progressBar"):
+            self.main_window.progressBar.setValue(percent)
+
+    def _status(self, text):
+        if self.status_callback:
+            self.status_callback(text)
+        elif self.main_window and hasattr(self.main_window, "lblCurrentFile"):
+            self.main_window.lblCurrentFile.setText(text)
 
     def runtime_detail(self):
         libre_status = detect_libreoffice()
@@ -325,8 +340,7 @@ class MergerLibre:
             total_sheets = len(sheets_to_merge)
             for index, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split("/", 1)
-                self.main_window.lblCurrentFile.setText(f"{item} 병합 중 (LibreOffice)...")
-                QApplication.processEvents()
+                self._status(f"{item} 병합 중 (LibreOffice)...")
 
                 file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
                 if not file_path:
@@ -350,8 +364,7 @@ class MergerLibre:
                 finally:
                     self._close_document(source_doc)
 
-                self.main_window.progressBar.setValue(int((index + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((index + 1) / total_sheets * 100))
 
             if len(self._sheet_names(output_doc)) > 1:
                 self._remove_sheet(output_doc, default_sheet_name)
@@ -390,8 +403,7 @@ class MergerLibre:
 
             for index, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split("/", 1)
-                self.main_window.lblCurrentFile.setText(f"{item} 병합 중 (LibreOffice)...")
-                QApplication.processEvents()
+                self._status(f"{item} 병합 중 (LibreOffice)...")
 
                 file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
                 if not file_path:
@@ -423,8 +435,7 @@ class MergerLibre:
                     if temp_name and temp_name in self._sheet_names(output_doc):
                         self._remove_sheet(output_doc, temp_name)
 
-                self.main_window.progressBar.setValue(int((index + 1) / total_sheets * 100))
-                QApplication.processEvents()
+                self._progress(int((index + 1) / total_sheets * 100))
 
             self._perform_sheet_trim(output_doc)
             self._store_output(uno, output_doc, save_path)

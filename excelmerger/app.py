@@ -7,7 +7,7 @@ from contextlib import suppress
 if "GTK_MODULES" in os.environ:
     del os.environ["GTK_MODULES"]
 
-from PySide6.QtCore import QEvent, QMimeData, QStringListModel, QTimer, Qt, QUrl
+from PySide6.QtCore import QEvent, QMimeData, QStringListModel, QTimer, Qt, QUrl, QThread, Signal, QObject
 from PySide6.QtGui import QAction, QDesktopServices, QDrag, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -43,6 +43,87 @@ if sys.platform == "win32":
 else:
     win32 = None
 
+class MergeSignals(QObject):
+    log = Signal(str)
+    progress = Signal(int)
+    status = Signal(str)
+    finished = Signal(bool, str)
+
+class MergeWorker(QThread):
+    def __init__(self, main_window, engine_key, merge_type, sheets_to_merge, save_path, encrypt_output, output_encryption_password):
+        super().__init__()
+        self.main_window = main_window
+        self.engine_key = engine_key
+        self.merge_type = merge_type
+        self.sheets_to_merge = sheets_to_merge
+        self.save_path = save_path
+        self.encrypt_output = encrypt_output
+        self.output_encryption_password = output_encryption_password
+        self.signals = MergeSignals()
+
+    def run(self):
+        try:
+            def log_cb(msg):
+                self.signals.log.emit(msg)
+            def prog_cb(pct):
+                self.signals.progress.emit(pct)
+            def stat_cb(txt):
+                self.signals.status.emit(txt)
+                
+            mergers = [self.main_window.merger, self.main_window.merger_poi, self.main_window.merger_win32, self.main_window.merger_libre]
+            for m in mergers:
+                m.log_callback = log_cb
+                m.progress_callback = prog_cb
+                m.status_callback = stat_cb
+
+            self._execute_merge(self.engine_key, self.merge_type, self.sheets_to_merge, self.save_path)
+            
+            if self.encrypt_output and self.output_encryption_password:
+                self.signals.log.emit("출력 파일 암호화 중...")
+                encrypted_file = io.BytesIO()
+                with open(self.save_path, "rb") as output_stream:
+                    office_file = msoffcrypto.OfficeFile(output_stream)
+                    office_file.encrypt(self.output_encryption_password, encrypted_file)
+
+                with open(self.save_path, "wb") as output_stream:
+                    output_stream.write(encrypted_file.getbuffer())
+                self.signals.log.emit("출력 파일 암호화 완료.")
+
+            self.signals.finished.emit(True, self.save_path)
+        except Exception as exc:
+            self.signals.log.emit(f"병합 오류: {exc}")
+            self.signals.finished.emit(False, str(exc))
+        finally:
+            self.signals.progress.emit(100)
+
+    def _execute_merge(self, engine_key, merge_type, sheets_to_merge, save_path):
+        if merge_type == "Sheet":
+            if engine_key == "excel":
+                self.main_window.merger_win32.merge_as_sheets_win32(sheets_to_merge, save_path)
+            elif engine_key == "libre":
+                self.main_window.merger_libre.merge_as_sheets_libre(sheets_to_merge, save_path)
+            elif engine_key == "jpype":
+                self.main_window.merger_poi.merge_as_sheets(sheets_to_merge, save_path)
+            else:
+                self.main_window.merger.merge_as_sheets(sheets_to_merge, save_path)
+        elif merge_type == "Horizontal":
+            if engine_key == "excel":
+                self.main_window.merger_win32.merge_horizontally_win32(sheets_to_merge, save_path)
+            elif engine_key == "libre":
+                self.main_window.merger_libre.merge_horizontally_libre(sheets_to_merge, save_path)
+            elif engine_key == "jpype":
+                self.main_window.merger_poi.merge_horizontally(sheets_to_merge, save_path)
+            else:
+                self.main_window.merger.merge_horizontally(sheets_to_merge, save_path)
+        elif merge_type == "Vertical":
+            if engine_key == "excel":
+                self.main_window.merger_win32.merge_vertically_win32(sheets_to_merge, save_path)
+            elif engine_key == "libre":
+                self.main_window.merger_libre.merge_vertically_libre(sheets_to_merge, save_path)
+            elif engine_key == "jpype":
+                self.main_window.merger_poi.merge_vertically(sheets_to_merge, save_path)
+            else:
+                self.main_window.merger.merge_vertically(sheets_to_merge, save_path)
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -665,34 +746,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.merge_list_model.setStringList(specific_sheets_to_merge)
 
-    def _execute_merge(self, engine_key, merge_type, sheets_to_merge, save_path):
-        if merge_type == "Sheet":
-            if engine_key == "excel":
-                self.merger_win32.merge_as_sheets_win32(sheets_to_merge, save_path)
-            elif engine_key == "libre":
-                self.merger_libre.merge_as_sheets_libre(sheets_to_merge, save_path)
-            elif engine_key == "jpype":
-                self.merger_poi.merge_as_sheets(sheets_to_merge, save_path)
-            else:
-                self.merger.merge_as_sheets(sheets_to_merge, save_path)
-        elif merge_type == "Horizontal":
-            if engine_key == "excel":
-                self.merger_win32.merge_horizontally_win32(sheets_to_merge, save_path)
-            elif engine_key == "libre":
-                self.merger_libre.merge_horizontally_libre(sheets_to_merge, save_path)
-            elif engine_key == "jpype":
-                self.merger_poi.merge_horizontally(sheets_to_merge, save_path)
-            else:
-                self.merger.merge_horizontally(sheets_to_merge, save_path)
-        elif merge_type == "Vertical":
-            if engine_key == "excel":
-                self.merger_win32.merge_vertically_win32(sheets_to_merge, save_path)
-            elif engine_key == "libre":
-                self.merger_libre.merge_vertically_libre(sheets_to_merge, save_path)
-            elif engine_key == "jpype":
-                self.merger_poi.merge_vertically(sheets_to_merge, save_path)
-            else:
-                self.merger.merge_vertically(sheets_to_merge, save_path)
+
 
     def start_merge(self):
         sheets_to_merge = self.merge_list_model.stringList()
@@ -728,25 +782,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if self.debug_mode:
                 self.txtLogOutput.append(f"DEBUG: file_passwords at start of merge: {self.file_passwords}")
 
-            self._execute_merge(engine_key, merge_type, sheets_to_merge, save_path)
+            self.btnStart.setEnabled(False)
+            
+            self.worker = MergeWorker(
+                self, engine_key, merge_type, sheets_to_merge, save_path,
+                self.encrypt_output, self.output_encryption_password
+            )
+            self.worker.signals.log.connect(self.txtLogOutput.append)
+            self.worker.signals.progress.connect(self.progressBar.setValue)
+            self.worker.signals.status.connect(self.lblCurrentFile.setText)
+            self.worker.signals.finished.connect(self._on_merge_finished)
+            self.worker.start()
+        except Exception as exc:
+            self.txtLogOutput.append(f"병합 시작 오류: {exc}")
+            self.btnStart.setEnabled(True)
 
-            if self.encrypt_output and self.output_encryption_password:
-                self.txtLogOutput.append("출력 파일 암호화 중...")
-                encrypted_file = io.BytesIO()
-                with open(save_path, "rb") as output_stream:
-                    office_file = msoffcrypto.OfficeFile(output_stream)
-                    office_file.encrypt(self.output_encryption_password, encrypted_file)
-
-                with open(save_path, "wb") as output_stream:
-                    output_stream.write(encrypted_file.getbuffer())
-                self.txtLogOutput.append("출력 파일 암호화 완료.")
-
+    def _on_merge_finished(self, success, save_path_or_error):
+        self.btnStart.setEnabled(True)
+        if success:
+            save_path = save_path_or_error
             self.txtLogOutput.append(f"병합 완료: {save_path}")
             self.gather_and_save_settings()
-        except Exception as exc:
-            self.txtLogOutput.append(f"병합 오류: {exc}")
-        finally:
-            self.progressBar.setValue(100)
             if os.path.exists(save_path):
                 try:
                     if sys.platform == "win32":

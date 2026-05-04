@@ -1,8 +1,6 @@
 import os
 from copy import copy
 
-from PySide6.QtWidgets import QApplication
-
 from excelmerger.engines.utils import build_output_sheet_name
 
 try:
@@ -19,8 +17,29 @@ except ImportError:
 class Merger:
     """openpyxl 기반 표준 병합 엔진. POI/Excel/LibreOffice가 모두 사용 불가할 때 최후 폴백."""
 
-    def __init__(self, main_window):
+    def __init__(self, main_window=None, log_callback=None, progress_callback=None, status_callback=None):
         self.main_window = main_window
+        self.log_callback = log_callback
+        self.progress_callback = progress_callback
+        self.status_callback = status_callback
+
+    def _log(self, message):
+        if self.log_callback:
+            self.log_callback(message)
+        elif self.main_window and hasattr(self.main_window, "txtLogOutput"):
+            self.main_window.txtLogOutput.append(message)
+
+    def _progress(self, percent):
+        if self.progress_callback:
+            self.progress_callback(percent)
+        elif self.main_window and hasattr(self.main_window, "progressBar"):
+            self.main_window.progressBar.setValue(percent)
+
+    def _status(self, text):
+        if self.status_callback:
+            self.status_callback(text)
+        elif self.main_window and hasattr(self.main_window, "lblCurrentFile"):
+            self.main_window.lblCurrentFile.setText(text)
 
     def is_available(self):
         return openpyxl is not None
@@ -36,7 +55,7 @@ class Merger:
         output_workbook.remove(output_workbook.active)
 
         if self.main_window.options['only_value_copy']:
-            self.main_window.txtLogOutput.append("수식을 값으로 변환하며 병합을 시작합니다...")
+            self._log("수식을 값으로 변환하며 병합을 시작합니다...")
 
         total_sheets = len(sheets_to_merge)
         for i, item in enumerate(sheets_to_merge):
@@ -44,7 +63,7 @@ class Merger:
             file_path = self.main_window.file_info.get(file_name, {}).get('processed_path')
 
             if not file_path:
-                self.main_window.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
+                self._log(f"파일을 찾을 수 없습니다: {file_name}")
                 continue
 
             try:
@@ -68,10 +87,9 @@ class Merger:
                 output_sheet = output_workbook.create_sheet(title=new_sheet_name)
                 self._copy_sheet_data(source_sheet, output_sheet, file_name=file_name)
             except Exception as exc:
-                self.main_window.txtLogOutput.append(f"시트 복사 오류 {item}: {exc}")
+                self._log(f"시트 복사 오류 {item}: {exc}")
 
-            self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
+            self._progress(int((i + 1) / total_sheets * 100))
 
         self._perform_sheet_trim(output_workbook)
         output_workbook.save(save_path)
@@ -90,17 +108,17 @@ class Merger:
         output_sheet.title = "Merged_Sheet"
 
         if self.main_window.options['only_value_copy']:
-            self.main_window.txtLogOutput.append("수식을 값으로 변환하며 병합을 시작합니다...")
+            self._log("수식을 값으로 변환하며 병합을 시작합니다...")
 
         total_sheets = len(sheets_to_merge)
         last_pos = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
-            self.main_window.lblCurrentFile.setText(f'{item} 병합 중...')
+            self._status(f'{item} 병합 중...')
 
             file_path = self.main_window.file_info.get(file_name, {}).get('processed_path')
             if not file_path:
-                self.main_window.txtLogOutput.append(f"파일을 찾을 수 없습니다: {file_name}")
+                self._log(f"파일을 찾을 수 없습니다: {file_name}")
                 continue
 
             try:
@@ -122,10 +140,9 @@ class Merger:
                     self._copy_sheet_data(source_sheet, output_sheet, start_row=last_pos + 1, file_name=file_name)
                     last_pos = output_sheet.max_row
             except Exception as exc:
-                self.main_window.txtLogOutput.append(f"시트 병합 오류 {item}: {exc}")
+                self._log(f"시트 병합 오류 {item}: {exc}")
 
-            self.main_window.progressBar.setValue(int((i + 1) / total_sheets * 100))
-            QApplication.processEvents()
+            self._progress(int((i + 1) / total_sheets * 100))
 
         self._perform_sheet_trim(output_workbook)
         output_workbook.save(save_path)
@@ -167,7 +184,7 @@ class Merger:
                 target_dimension.hidden = dimension.hidden
 
         elif xlrd is not None and isinstance(source_sheet, xlrd.sheet.Sheet):
-            self.main_window.txtLogOutput.append(f".xls 파일({file_name}/{source_sheet.name})의 서식은 일부만 지원됩니다.")
+            self._log(f".xls 파일({file_name}/{source_sheet.name})의 서식은 일부만 지원됩니다.")
             for row_idx in range(source_sheet.nrows):
                 for col_idx in range(source_sheet.ncols):
                     cell_value = source_sheet.cell_value(row_idx, col_idx)
@@ -183,7 +200,7 @@ class Merger:
         if not trim_rows and not trim_cols:
             return
 
-        self.main_window.txtLogOutput.append("시트 정리(SheetTrim) 기능 수행 중...")
+        self._log("시트 정리(SheetTrim) 기능 수행 중...")
 
         for worksheet in workbook.worksheets:
             if trim_rows:
@@ -202,7 +219,7 @@ class Merger:
                 for start, count in reversed(self._build_trim_blocks(empty_col_indices, sheet_trim_value)):
                     worksheet.delete_cols(start, count)
 
-        self.main_window.txtLogOutput.append("시트 정리(SheetTrim) 완료.")
+        self._log("시트 정리(SheetTrim) 완료.")
 
     def _build_trim_blocks(self, indexes, threshold):
         if not indexes:

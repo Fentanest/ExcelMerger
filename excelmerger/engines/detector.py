@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+import time
 
 from excelmerger.runtime_paths import bundled_java_home, poi_jar_dir
 
@@ -164,8 +165,13 @@ def detect_jpype():
     if bundled_home:
         os.environ.setdefault("JAVA_HOME", bundled_home)
 
+    global _jvm_path_cache
+    if "_jvm_path_cache" not in globals():
+        _jvm_path_cache = None
+
     try:
-        jpype.getDefaultJVMPath()
+        if _jvm_path_cache is None:
+            _jvm_path_cache = jpype.getDefaultJVMPath()
     except Exception as exc:
         return _status(
             "jpype",
@@ -183,10 +189,25 @@ def detect_jpype():
     )
 
 
+_ENGINE_CACHE_TTL = 5.0
+_engine_cache_data = None
+_engine_cache_time = 0.0
+
 def get_available_engines():
-    return {
+    global _engine_cache_data, _engine_cache_time
+    now = time.time()
+    
+    if _engine_cache_data is not None and (now - _engine_cache_time) < _ENGINE_CACHE_TTL:
+        return _engine_cache_data
+
+    status = {
         "standard": _status("standard", "표준 병합", True, "표준 병합은 항상 사용 가능합니다."),
         "excel": detect_excel(),
         "libre": detect_libreoffice(),
         "jpype": detect_jpype(),
     }
+    
+    _engine_cache_data = status
+    _engine_cache_time = now
+    
+    return status
