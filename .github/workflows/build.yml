@@ -132,7 +132,33 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path dist\ExcelMerger.exe -DestinationPath ("release\" + "${{ steps.version.outputs.asset }}") -Force
+          $src = "dist\ExcelMerger.exe"
+          $dst = "release\${{ steps.version.outputs.asset }}"
+          # PyInstaller/UPX/Defender may briefly hold the new .exe; wait for the handle to release.
+          $deadline = (Get-Date).AddSeconds(120)
+          $released = $false
+          while ((Get-Date) -lt $deadline) {
+            try {
+              $fh = [System.IO.File]::Open($src, 'Open', 'Read', 'None')
+              $fh.Dispose()
+              $released = $true
+              break
+            } catch {
+              Write-Host "Waiting for $src to be released..."
+              Start-Sleep -Seconds 3
+            }
+          }
+          if (-not $released) {
+            Write-Warning "File still appears locked after 120s; attempting Compress-Archive anyway."
+          }
+          # Robocopy to a staging dir that copies even when source is briefly contested, then archive.
+          $staging = Join-Path $env:RUNNER_TEMP ("pkg-" + [guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+          robocopy "dist" $staging "ExcelMerger.exe" /R:5 /W:3 /NJH /NJS /NFL /NDL | Out-Null
+          if (-not (Test-Path (Join-Path $staging "ExcelMerger.exe"))) {
+            throw "Failed to stage ExcelMerger.exe for packaging."
+          }
+          Compress-Archive -Path (Join-Path $staging "ExcelMerger.exe") -DestinationPath $dst -Force
 
       - uses: actions/upload-artifact@v7
         with:
