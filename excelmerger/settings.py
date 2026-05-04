@@ -16,7 +16,7 @@ DEFAULT_OPTIONS = {
     "sheet_trim_rows": False,
     "sheet_trim_cols": False,
     "only_value_copy": False,
-    "merge_engine": "standard",
+    "merge_engine": "auto",
 }
 
 
@@ -73,7 +73,7 @@ class SettingsManager:
 
                 if "merge_engine" not in options_section:
                     legacy_win32 = options_section.getboolean("use_win32_mode", False)
-                    settings["options"]["merge_engine"] = "excel" if legacy_win32 else "standard"
+                    settings["options"]["merge_engine"] = "excel" if legacy_win32 else "auto"
                     needs_resave = True
 
                 settings["debug_mode"] = options_section.getboolean("debug_mode", False)

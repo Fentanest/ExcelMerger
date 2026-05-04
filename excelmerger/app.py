@@ -12,14 +12,10 @@ from PySide6.QtGui import QAction, QDesktopServices, QDrag, QIcon
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QButtonGroup,
     QFileDialog,
-    QGroupBox,
     QMainWindow,
     QProgressDialog,
     QMessageBox,
-    QRadioButton,
-    QVBoxLayout,
 )
 
 import msoffcrypto
@@ -62,7 +58,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         version_action.setEnabled(False)
         self.menuMade_by_Fentanest.addAction(version_action)
 
-        self._setup_engine_selector()
+        # Legacy "고품질 모드" toggle is replaced by the engine selector inside the Options dialog.
+        with suppress(Exception):
+            self.menu_2.removeAction(self.actionWin32)
+            self.actionWin32.setVisible(False)
 
         self.settings_manager = SettingsManager()
         self.file_handler = FileHandler(self)
@@ -100,7 +99,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._connect_signals()
         self.load_and_apply_settings()
         self.detect_merge_engines()
-        self.apply_engine_selector_state()
+        self._reconcile_engine_selection()
 
         self.radioButtonChoice.setChecked(True)
         self.update_sheet_selection_mode()
@@ -146,33 +145,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.btnStart.clicked.connect(self.start_merge)
         self.checkBoxOnlyValue.toggled.connect(self.on_only_value_copy_toggled)
 
-    def _setup_engine_selector(self):
-        with suppress(Exception):
-            self.menu_2.removeAction(self.actionWin32)
-            self.actionWin32.setVisible(False)
-
-        self.engineGroupBox = QGroupBox("병합 엔진", self.centralwidget)
-        self.engineGroupBox.setGeometry(10, 390, 210, 70)
-
-        layout = QVBoxLayout(self.engineGroupBox)
-        layout.setContentsMargins(10, 16, 10, 6)
-        layout.setSpacing(1)
-
-        self.engineButtonGroup = QButtonGroup(self)
-
-        self.radioEngineStandard = QRadioButton("표준 병합")
-        self.radioEngineExcel = QRadioButton("Microsoft Excel 이용")
-        self.radioEngineLibre = QRadioButton("LibreOffice 이용")
-
-        for engine_key, button in (
-            ("standard", self.radioEngineStandard),
-            ("excel", self.radioEngineExcel),
-            ("libre", self.radioEngineLibre),
-        ):
-            button.setProperty("engine_key", engine_key)
-            layout.addWidget(button)
-            self.engineButtonGroup.addButton(button)
-            button.toggled.connect(self.on_merge_engine_changed)
+    AUTO_PRIORITY = ("excel", "libre", "jpype", "standard")
 
     def detect_merge_engines(self):
         self.engine_status = get_available_engines()
@@ -180,68 +153,53 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.txtLogOutput.append(self.engine_status["libre"]["detail"])
         self.txtLogOutput.append(self.engine_status["jpype"]["detail"])
 
-    def apply_engine_selector_state(self):
-        self.radioEngineStandard.setEnabled(True)
-        self.radioEngineExcel.setEnabled(self.engine_status.get("excel", {}).get("available", False))
-        self.radioEngineLibre.setEnabled(self.engine_status.get("libre", {}).get("available", False))
+    def _engine_runtime_available(self, engine_key):
+        if engine_key == "auto":
+            return True
+        if engine_key == "excel":
+            return self.engine_status.get("excel", {}).get("available", False) and bool(win32)
+        if engine_key == "libre":
+            return self.engine_status.get("libre", {}).get("available", False) and self.merger_libre.is_usable()
+        if engine_key == "jpype":
+            return self.engine_status.get("jpype", {}).get("available", False)
+        if engine_key == "standard":
+            return self.merger.is_available()
+        return False
 
-        self.radioEngineStandard.setToolTip(self.engine_status.get("standard", {}).get("detail", ""))
-        self.radioEngineExcel.setToolTip(self.engine_status.get("excel", {}).get("detail", ""))
-        self.radioEngineLibre.setToolTip(self.engine_status.get("libre", {}).get("detail", ""))
-
-        requested_engine = self.options.get("merge_engine", "standard")
-        if requested_engine == "excel" and not self.radioEngineExcel.isEnabled():
-            requested_engine = "standard"
-        if requested_engine == "libre" and not self.radioEngineLibre.isEnabled():
-            requested_engine = "standard"
-
-        if requested_engine == "excel":
-            self.radioEngineExcel.setChecked(True)
-        elif requested_engine == "libre":
-            self.radioEngineLibre.setChecked(True)
-        else:
-            self.radioEngineStandard.setChecked(True)
-
-    def current_engine_selection(self):
-        if self.radioEngineExcel.isChecked():
-            return "excel"
-        if self.radioEngineLibre.isChecked():
-            return "libre"
-        return "standard"
+    def _reconcile_engine_selection(self):
+        """Demote a stored selection to 'auto' when its runtime is no longer present."""
+        requested = self.options.get("merge_engine", "auto")
+        if requested in {"auto", "standard"}:
+            return
+        if not self._engine_runtime_available(requested):
+            self.txtLogOutput.append(
+                f"이전에 선택된 '{self._engine_label(requested)}' 엔진이 비활성화되어 자동 선택으로 되돌립니다."
+            )
+            self.options["merge_engine"] = "auto"
+            self.gather_and_save_settings()
 
     def resolved_engine(self):
-        requested_engine = self.options.get("merge_engine", "standard")
+        requested = self.options.get("merge_engine", "auto")
 
-        if requested_engine == "excel":
-            if self.engine_status.get("excel", {}).get("available", False) and win32:
-                return "excel"
-            self.txtLogOutput.append("Microsoft Excel 엔진을 사용할 수 없어 JPype/표준 엔진으로 대체합니다.")
+        if requested != "auto" and self._engine_runtime_available(requested):
+            return requested
 
-        elif requested_engine == "libre":
-            if self.engine_status.get("libre", {}).get("available", False) and self.merger_libre.is_usable():
-                return "libre"
-            detail = self.merger_libre.runtime_detail()
-            if detail:
-                self.txtLogOutput.append(detail)
-            self.txtLogOutput.append("LibreOffice 엔진을 사용할 수 없어 JPype/표준 엔진으로 대체합니다.")
+        if requested != "auto":
+            self.txtLogOutput.append(
+                f"'{self._engine_label(requested)}' 엔진을 사용할 수 없어 자동 폴백을 시도합니다."
+            )
 
-        elif requested_engine == "standard":
-            if self.merger.is_available():
-                return "standard"
-            if self.engine_status.get("jpype", {}).get("available", False):
-                self.txtLogOutput.append("표준 엔진 런타임이 없어 JPype 엔진으로 대체합니다.")
-                return "jpype"
-            raise RuntimeError("표준 병합 엔진을 실행할 수 없습니다.")
+        for candidate in self.AUTO_PRIORITY:
+            if self._engine_runtime_available(candidate):
+                return candidate
 
-        if self.engine_status.get("jpype", {}).get("available", False):
-            return "jpype"
-        if self.merger.is_available():
-            return "standard"
         raise RuntimeError("사용 가능한 병합 엔진을 찾을 수 없습니다.")
 
     def suggested_output_extension(self, engine_key=None):
         if engine_key is None:
-            engine_key = self.current_engine_selection()
+            engine_key = self.options.get("merge_engine", "auto")
+            if engine_key == "auto" and self._engine_runtime_available("excel"):
+                engine_key = "excel"
         if engine_key == "excel" and has_macro_source(self.file_info):
             return ".xlsm"
         return ".xlsx"
@@ -270,10 +228,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _engine_label(self, engine_key):
         return {
+            "auto": "자동",
             "excel": "Microsoft Excel",
             "libre": "LibreOffice",
-            "jpype": "JPype(Apache POI)",
-            "standard": "표준",
+            "jpype": "Java (Apache POI)",
+            "standard": "Python (openpyxl)",
         }.get(engine_key, engine_key)
 
     def open_blog(self):
@@ -405,40 +364,45 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("출력 파일 암호화 설정이 업데이트되었습니다.")
 
     def open_options_dialog(self):
+        # Refresh detection so options reflect current runtime availability.
+        self.detect_merge_engines()
+
         options_for_dialog = {
             "merge_type": self.options.get("merge_type", "Sheet"),
             "sheet_name_rule": self.options.get("sheet_name_rule", "OriginalBoth"),
             "sheet_trim_value": self.options.get("sheet_trim_value", 0),
             "sheet_trim_rows": self.options.get("sheet_trim_rows", False),
             "sheet_trim_cols": self.options.get("sheet_trim_cols", False),
+            "merge_engine": self.options.get("merge_engine", "auto"),
         }
-        dialog = OptionsDialog(self, current_options=options_for_dialog)
+        dialog = OptionsDialog(
+            self,
+            current_options=options_for_dialog,
+            engine_status=self.engine_status,
+        )
         dialog.setWindowIcon(self.windowIcon())
         if dialog.exec():
-            updated_options = dialog.get_options()
-            self.options["merge_type"] = updated_options.get("merge_type", "Sheet")
-            self.options["sheet_name_rule"] = updated_options.get("sheet_name_rule", "OriginalBoth")
-            self.options["sheet_trim_value"] = updated_options.get("sheet_trim_value", 0)
-            self.options["sheet_trim_rows"] = updated_options.get("sheet_trim_rows", False)
-            self.options["sheet_trim_cols"] = updated_options.get("sheet_trim_cols", False)
+            updated = dialog.get_options()
+            previous_engine = self.options.get("merge_engine", "auto")
+            new_engine = updated.get("merge_engine", "auto")
+
+            self.options["merge_type"] = updated.get("merge_type", "Sheet")
+            self.options["sheet_name_rule"] = updated.get("sheet_name_rule", "OriginalBoth")
+            self.options["sheet_trim_value"] = updated.get("sheet_trim_value", 0)
+            self.options["sheet_trim_rows"] = updated.get("sheet_trim_rows", False)
+            self.options["sheet_trim_cols"] = updated.get("sheet_trim_cols", False)
+            self.options["merge_engine"] = new_engine
+
             self.txtLogOutput.append("옵션이 업데이트되었습니다.")
+            if new_engine != previous_engine:
+                self.txtLogOutput.append(f"병합 엔진 선택: {self._engine_label(new_engine)}")
+            self._sync_save_path_extension()
             self.gather_and_save_settings()
 
     def on_only_value_copy_toggled(self, checked):
         self.options["only_value_copy"] = checked
         if not self._loading_settings:
             self.gather_and_save_settings()
-
-    def on_merge_engine_changed(self, checked):
-        if not checked:
-            return
-        button = self.sender()
-        engine_key = button.property("engine_key") if button else "standard"
-        self.options["merge_engine"] = engine_key
-        if not self._loading_settings:
-            self._sync_save_path_extension()
-            self.gather_and_save_settings()
-            self.txtLogOutput.append(f"병합 엔진 선택: {self._engine_label(engine_key)}")
 
     def on_debug_mode_toggled(self, checked):
         self.debug_mode = checked

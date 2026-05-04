@@ -9,7 +9,7 @@
 ├── main.py                       # 엔트리: from excelmerger import main
 ├── version.py                    # __version__ (CI가 sed로 읽음)
 ├── ExcelMerger.spec              # PyInstaller 스펙 (main.py로부터 의존성 추적)
-├── requirements.txt              # 런타임 의존성 (PySide6, JPype1, msoffcrypto-tool, pywin32, openpyxl)
+├── requirements.txt              # 런타임 의존성 (PySide6, JPype1, msoffcrypto-tool, pywin32, openpyxl, xlrd, pyxlsb)
 ├── ui.sh                         # excelmerger/ui/forms/*.ui → *_ui.py 재생성
 ├── config.ini                    # 사용자 설정 (런타임 생성, 비추적)
 ├── README.md, CHANGELOG.md, CLAUDE.md, LICENSE
@@ -40,23 +40,33 @@
 
 ## 엔진 아키텍처
 
-`excelmerger/app.py::MainWindow.resolved_engine()`이 다음 순서로 실행 엔진을 결정:
+엔진 선택은 **옵션 다이얼로그**(`OptionsDialog`)에서만 변경 가능. 메인 UI에는 셀렉터를 두지 않습니다. 5개 옵션:
+
+| 키        | 라벨                      | 가용성 게이트                                  |
+|-----------|---------------------------|-----------------------------------------------|
+| auto      | 자동 (사용 가능한 최고 엔진) | 항상 활성                                      |
+| excel     | Microsoft Excel            | `detector.detect_excel().available && win32`  |
+| libre     | LibreOffice                | `detector.detect_libreoffice().available && merger_libre.is_usable()` |
+| jpype     | Java (Apache POI)          | `detector.detect_jpype().available`            |
+| standard  | Python (openpyxl)          | 항상 활성 (런타임에 openpyxl 없으면 폴백)     |
+
+`app.py::MainWindow.resolved_engine()` 결정 로직:
 
 ```
-사용자 라디오 선택(merge_engine 옵션)
-├── "excel"    → Excel 감지됨 + win32com 사용 가능 → engines/win32.py
-├── "libre"    → LibreOffice 감지됨 + PyUNO 사용 가능 → engines/libreoffice.py
-├── "standard" → openpyxl 사용 가능 → engines/standard.py
-│              └ 없으면 jpype로 자동 강등
-└── 모든 자동 폴백 실패 → RuntimeError
+options.merge_engine == "auto"
+└── AUTO_PRIORITY = (excel, libre, jpype, standard) 순회 → 첫 가용 엔진
+options.merge_engine == 특정 엔진
+├── 해당 엔진 가용 → 그대로 사용
+└── 아니면 로그 출력 후 AUTO_PRIORITY로 폴백
 ```
 
 각 엔진은 동일한 3개 메서드를 노출 (이름은 다름): `merge_as_sheets_*`, `merge_horizontally_*`, `merge_vertically_*`. `app.py::_execute_merge`가 (`engine_key`, `merge_type`) 매트릭스로 디스패치.
 
 ### 책임 분리 원칙
-- `standard` 엔진은 **openpyxl만** 다룸. POI로의 폴백 라우팅은 `app.py::resolved_engine()`이 단일 지점에서 결정하며, 엔진 내부에서 다른 엔진을 호출하지 않음 (이전의 `_use_poi_first` 우회 헬퍼는 제거됨).
+- `standard` 엔진은 **openpyxl/xlrd/pyxlsb를 사용한 순수 Python 폴백**. POI로의 위임은 하지 않으며, 폴백 라우팅은 `app.py::resolved_engine()`이 단일 지점에서 결정.
 - `detector.py`만 외부 런타임을 탐색하며, 결과는 `{key, label, available, detail, path}` 딕셔너리로 통일.
-- `file_handler.convert_to_xlsx`는 win32 → POI → openpyxl 순으로 시도; 변환 자체는 항상 임시 .xlsx로 산출.
+- `file_handler.convert_to_xlsx`는 win32 → POI → openpyxl/xlrd/pyxlsb 순으로 시도; 변환 자체는 항상 임시 .xlsx로 산출.
+- 옵션 다이얼로그가 매번 열릴 때 `detect_merge_engines()`로 가용성을 재평가하여 비활성 라디오를 갱신.
 
 ### 핵심 기술 요점
 - **VBA 보존**: `engines/utils.py::has_macro_source`로 입력에 .xlsm이 있는지 판정 → Win32 엔진은 `FileFormat=52`로 저장, UI 파일 다이얼로그 필터도 동적으로 .xlsm 추가 (`app.py::_save_file_filter`).
@@ -70,7 +80,8 @@
 
 - PyInstaller가 `main.py`로부터 정적 import 추적으로 `excelmerger.*`를 모두 수집.
 - `ExcelMerger.spec`은 `EXCELMERGER_INCLUDE_JRE=1` 환경변수로 `lib/jre`를 datas에 조건부 포함.
-- CI(`.github/workflows/build.yml`)는 4 플랫폼 × `include_jre: [false, true]` = 8 산출물을 생성하여 GitHub Release에 업로드.
+- CI(`.github/workflows/build.yml`, `build-test.yml`)는 4 플랫폼 × `include_jre: [false, true]` = 8 산출물을 생성. `build.yml`만 GitHub Release에 업로드, `build-test.yml`은 수동 dispatch용.
+- 각 빌드 잡은 PyInstaller 실행 직전에 UPX 5.1.1을 설치 (Windows: GitHub release zip, Linux: amd64_linux tar.xz, macOS: `brew install upx`). `ExcelMerger.spec`의 `upx=True`가 PATH의 upx를 사용해 실행 파일을 압축.
 - 검증 베이스라인: Python 3.13 + JPype1 1.6.0 + OpenJDK 17/21. JPype 1.7.0은 JVM 충돌 이슈로 회피.
 
 ## 개발 워크플로
