@@ -6,6 +6,7 @@ on:
 env:
   PYTHON_VERSION: "3.13"
   JAVA_VERSION: "21"
+  UPX_VERSION: "5.1.1"
   POI_VERSION: "5.3.0"
   XMLBEANS_VERSION: "5.2.1"
   COMMONS_COLLECTIONS4_VERSION: "4.4"
@@ -43,9 +44,9 @@ jobs:
           if (-not $versionString) { throw "version.py에서 __version__을 찾을 수 없습니다." }
           echo "version=$versionString" >> $env:GITHUB_OUTPUT
           if ("${{ matrix.include_jre }}" -eq "true") {
-            echo "asset=ExcelMerger-test-$versionString-Windows-x64-jre.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64-jre" >> $env:GITHUB_OUTPUT
           } else {
-            echo "asset=ExcelMerger-test-$versionString-Windows-x64.zip" >> $env:GITHUB_OUTPUT
+            echo "asset=ExcelMerger-test-$versionString-Windows-x64" >> $env:GITHUB_OUTPUT
           }
 
       - name: Install Python dependencies
@@ -82,19 +83,43 @@ jobs:
           Remove-Item -Recurse -Force lib\jre -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force $env:JAVA_HOME lib\jre
 
+      - name: Install UPX
+        shell: powershell
+        run: |
+          $url = "https://github.com/upx/upx/releases/download/v$env:UPX_VERSION/upx-$env:UPX_VERSION-win64.zip"
+          $zip = Join-Path $env:RUNNER_TEMP "upx-$env:UPX_VERSION.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "upx-$env:UPX_VERSION"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $upxBin = (Get-ChildItem -Path $extract -Recurse -Filter upx.exe | Select-Object -First 1).Directory.FullName
+          if (-not $upxBin) { throw "upx.exe not found inside $extract" }
+          Add-Content $env:GITHUB_PATH $upxBin
+          & "$upxBin\upx.exe" --version
+
       - name: Build executable
         shell: powershell
         run: |
           $env:EXCELMERGER_INCLUDE_JRE = if ("${{ matrix.include_jre }}" -eq "true") { "1" } else { "0" }
           .\venv\Scripts\pyinstaller.exe ExcelMerger.spec
 
-      - name: Package artifact
+      - name: Wait for build artifacts to release
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Compress-Archive -Path dist\ExcelMerger.exe -DestinationPath ("release\" + "${{ steps.version.outputs.asset }}") -Force
+          $exe = "dist\ExcelMerger\ExcelMerger.exe"
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Get-Date) -lt $deadline) {
+            try {
+              $fh = [System.IO.File]::Open($exe, 'Open', 'Read', 'None')
+              $fh.Dispose()
+              break
+            } catch {
+              Write-Host "Waiting for $exe to be released..."
+              Start-Sleep -Seconds 3
+            }
+          }
 
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.asset }}
-          path: release/${{ steps.version.outputs.asset }}
+          path: dist/ExcelMerger/

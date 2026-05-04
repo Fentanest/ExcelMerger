@@ -6,6 +6,7 @@ on:
 env:
   PYTHON_VERSION: "3.13"
   JAVA_VERSION: "21"
+  UPX_VERSION: "5.1.1"
   POI_VERSION: "5.3.0"
   XMLBEANS_VERSION: "5.2.1"
   COMMONS_COLLECTIONS4_VERSION: "4.4"
@@ -41,9 +42,9 @@ jobs:
           version=$(sed -n 's/.*__version__ = "\([^"]*\)".*/\1/p' version.py)
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [ "${{ matrix.include_jre }}" = "true" ]; then
-            echo "asset=ExcelMerger-test-$version-Linux-x64-jre.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-Linux-x64-jre" >> "$GITHUB_OUTPUT"
           else
-            echo "asset=ExcelMerger-test-$version-Linux-x64.tar.gz" >> "$GITHUB_OUTPUT"
+            echo "asset=ExcelMerger-test-$version-Linux-x64" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Python dependencies
@@ -71,16 +72,22 @@ jobs:
           rm -rf lib/jre
           cp -R "$JAVA_HOME" lib/jre
 
+      - name: Install UPX
+        run: |
+          UPX_DIR="$RUNNER_TEMP/upx-${UPX_VERSION}"
+          mkdir -p "$UPX_DIR"
+          curl -fsSL -o "$UPX_DIR/upx.tar.xz" \
+            "https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz"
+          tar -xJf "$UPX_DIR/upx.tar.xz" -C "$UPX_DIR" --strip-components=1
+          echo "$UPX_DIR" >> "$GITHUB_PATH"
+          export PATH="$UPX_DIR:$PATH"
+          upx --version
+
       - name: Build executable
         run: |
           EXCELMERGER_INCLUDE_JRE=${{ matrix.include_jre && '1' || '0' }} ./venv/bin/pyinstaller ExcelMerger.spec
 
-      - name: Package artifact
-        run: |
-          mkdir -p release
-          tar -czf "release/${{ steps.version.outputs.asset }}" -C dist ExcelMerger
-
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.asset }}
-          path: release/${{ steps.version.outputs.asset }}
+          path: dist/ExcelMerger/
