@@ -2,7 +2,11 @@ import pathlib
 import tempfile
 import unittest
 
-from openpyxl import Workbook, load_workbook
+try:
+    from openpyxl import Workbook, load_workbook
+except ImportError:  # pragma: no cover - test environment without openpyxl
+    Workbook = None
+    load_workbook = None
 
 from excelmerger.engines.detector import detect_jpype
 from excelmerger.engines.poi import MergerPOI
@@ -41,7 +45,7 @@ class _MainWindowStub:
         self.lblCurrentFile = _Label()
 
 
-@unittest.skipUnless(detect_jpype()["available"], "JPype/POI runtime unavailable")
+@unittest.skipUnless(detect_jpype()["available"] and Workbook is not None, "JPype/POI runtime unavailable")
 class MergerPOITests(unittest.TestCase):
     def test_merge_as_sheets_preserves_formula(self):
         with tempfile.TemporaryDirectory() as tmpdir:

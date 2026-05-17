@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.14"
   JAVA_VERSION: "21"
   UPX_VERSION: "5.1.1"
   POI_VERSION: "5.3.0"
@@ -43,9 +43,10 @@ jobs:
           fi
       - name: Install Python dependencies
         run: |
-          python3 -m venv venv
-          ./venv/bin/python -m pip install --upgrade pip
+          python -m venv venv
+          ./venv/bin/python -m pip install --upgrade pip setuptools wheel
           ./venv/bin/pip install -r requirements.txt pyinstaller
+          ./venv/bin/python -m pip check
       - name: Download Apache POI jars
         run: |
           mkdir -p lib/poi
@@ -63,13 +64,18 @@ jobs:
         run: |
           rm -rf lib/jre
           cp -R "$JAVA_HOME" lib/jre
+
+      - name: Run unit tests
+        if: ${{ !matrix.include_jre }}
+        run: |
+          ./venv/bin/python -m unittest discover -s tests -q
       - name: Install UPX
         run: |
           brew list upx >/dev/null 2>&1 || brew install upx
           upx --version
       - name: Build executable
         run: |
-          EXCELMERGER_INCLUDE_JRE=${{ matrix.include_jre && '1' || '0' }} ./venv/bin/pyinstaller ExcelMerger.spec
+          EXCELMERGER_INCLUDE_JRE=${{ matrix.include_jre && '1' || '0' }} ./venv/bin/pyinstaller -y ExcelMerger.spec
       - name: Package DMG
         run: |
           mkdir -p release

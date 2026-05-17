@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 from excelmerger.engines.utils import build_output_sheet_name, has_macro_source
+from excelmerger.file_registry import source_file_name
 
 class MergerWin32:
     def __init__(self, main_window=None, win32=None, log_callback=None, progress_callback=None, status_callback=None):
@@ -63,8 +64,11 @@ class MergerWin32:
                 excel.DisplayAlerts = False
                 excel.Application.Quit()
 
-    def _open_source_workbook(self, excel, processed_path, file_name):
-        password = self.main_window.file_passwords.get(file_name)
+    def _open_source_workbook(self, excel, info, file_name):
+        processed_path = info["processed_path"]
+        if os.path.abspath(processed_path) != os.path.abspath(info.get("original_path", processed_path)):
+            return excel.Workbooks.Open(processed_path, UpdateLinks=0)
+        password = self.main_window.file_passwords.get(info.get("password_key"))
         if password:
             if self.main_window.debug_mode:
                 self.main_window.txtLogOutput.append(f"DEBUG: {file_name}에 기억된 비밀번호로 열기 시도 (Win32)...")
@@ -86,6 +90,8 @@ class MergerWin32:
             excel.DisplayAlerts = False
             merged_workbook = excel.Workbooks.Add()
             default_sheet_name = merged_workbook.Worksheets(1).Name
+            sheet_errors = []
+            merged_count = 0
 
             total_sheets = len(sheets_to_merge)
             for i, item in enumerate(sheets_to_merge):
@@ -97,10 +103,8 @@ class MergerWin32:
                     self.main_window.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
                     continue
                 
-                processed_path = os.path.abspath(info['processed_path'])
-                
                 try:
-                    source_workbook = self._open_source_workbook(excel, processed_path, file_name)
+                    source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     
                     source_sheet.Copy(Before=merged_workbook.Worksheets(1))
@@ -113,7 +117,7 @@ class MergerWin32:
                         pass
 
                     new_sheet_name = build_output_sheet_name(
-                        file_name,
+                        source_file_name(info, file_name),
                         sheet_name,
                         self.main_window.options.get('sheet_name_rule', 'OriginalBoth'),
                         [merged_workbook.Worksheets(index).Name for index in range(1, merged_workbook.Worksheets.Count + 1)],
@@ -122,10 +126,20 @@ class MergerWin32:
                     
                     source_workbook.Close(SaveChanges=False)
                     time.sleep(0.1)
+                    merged_count += 1
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 복사 오류 (win32) {item}: {e}")
+                    sheet_errors.append(item)
                 
                 self._progress(int((i + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"Win32 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("Win32 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             # Delete the default sheet that was created with the new workbook
             if merged_workbook.Worksheets.Count > 1:
@@ -148,6 +162,7 @@ class MergerWin32:
 
         except Exception as e:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
+            raise
         finally:
             if excel:
                 excel.DisplayAlerts = False
@@ -162,6 +177,8 @@ class MergerWin32:
             output_workbook = excel.Workbooks.Add()
             output_sheet = output_workbook.Worksheets(1)
             output_sheet.Name = "Merged_Sheet"
+            sheet_errors = []
+            merged_count = 0
 
             total_sheets = len(sheets_to_merge)
             last_pos = 0
@@ -174,10 +191,8 @@ class MergerWin32:
                     self.main_window.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
                     continue
                 
-                processed_path = os.path.abspath(info['processed_path'])
-
                 try:
-                    source_workbook = self._open_source_workbook(excel, processed_path, file_name)
+                    source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     source_range = source_sheet.UsedRange
 
@@ -196,10 +211,20 @@ class MergerWin32:
                     
                     source_workbook.Close(SaveChanges=False)
                     time.sleep(0.1)
+                    merged_count += 1
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
+                    sheet_errors.append(item)
                 
                 self._progress(int((i + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"Win32 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("Win32 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             if self.main_window.options['only_value_copy']:
                 self.main_window.txtLogOutput.append("병합된 시트의 수식을 값으로 변환 중 (고품질 모드)...")
@@ -214,6 +239,7 @@ class MergerWin32:
 
         except Exception as e:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
+            raise
         finally:
             if excel:
                 excel.DisplayAlerts = False

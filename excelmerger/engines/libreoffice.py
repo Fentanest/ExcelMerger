@@ -5,6 +5,7 @@ from contextlib import suppress
 
 from excelmerger.engines.detector import detect_libreoffice
 from excelmerger.engines.utils import build_output_sheet_name
+from excelmerger.file_registry import source_file_name
 
 
 def _import_uno():
@@ -43,12 +44,7 @@ class MergerLibre:
         libre_status = detect_libreoffice()
         if not libre_status.get("available", False):
             return libre_status.get("detail", "LibreOffice를 찾을 수 없습니다.")
-
-        try:
-            _import_uno()
-            return ""
-        except ImportError:
-            return "PyUNO 브리지가 없어 LibreOffice 엔진을 직접 실행할 수 없습니다."
+        return ""
 
     def is_usable(self):
         return self.runtime_detail() == ""
@@ -336,6 +332,8 @@ class MergerLibre:
             started_here = self._started_process is not None
             output_doc = self._new_calc_document(uno, desktop)
             default_sheet_name = self._sheet_names(output_doc)[0]
+            sheet_errors = []
+            merged_count = 0
 
             total_sheets = len(sheets_to_merge)
             for index, item in enumerate(sheets_to_merge):
@@ -343,15 +341,17 @@ class MergerLibre:
                 self._status(f"{item} 병합 중 (LibreOffice)...")
 
                 file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
+                info = self.main_window.file_info.get(file_name, {})
                 if not file_path:
                     self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                    sheet_errors.append(item)
                     continue
 
                 source_doc = None
                 try:
                     source_doc = self._load_document(uno, desktop, file_path)
                     final_name = build_output_sheet_name(
-                        file_name,
+                        source_file_name(info, file_name),
                         sheet_name,
                         self.main_window.options.get("sheet_name_rule", "OriginalBoth"),
                         self._sheet_names(output_doc),
@@ -359,12 +359,22 @@ class MergerLibre:
                     temp_name = self._make_unique_name(self._sheet_names(output_doc), f"tmp_{final_name}")
                     imported_sheet = self._import_sheet(output_doc, source_doc, sheet_name, temp_name)
                     imported_sheet.setName(final_name)
+                    merged_count += 1
                 except Exception as exc:
                     self._log(f"LibreOffice 시트 복사 오류 {item}: {exc}")
+                    sheet_errors.append(item)
                 finally:
                     self._close_document(source_doc)
 
                 self._progress(int((index + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"LibreOffice 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("LibreOffice 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             if len(self._sheet_names(output_doc)) > 1:
                 self._remove_sheet(output_doc, default_sheet_name)
@@ -400,6 +410,8 @@ class MergerLibre:
             next_row = 0
             next_col = 0
             total_sheets = len(sheets_to_merge)
+            sheet_errors = []
+            merged_count = 0
 
             for index, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split("/", 1)
@@ -408,6 +420,7 @@ class MergerLibre:
                 file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
                 if not file_path:
                     self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                    sheet_errors.append(item)
                     continue
 
                 source_doc = None
@@ -428,14 +441,24 @@ class MergerLibre:
                         next_col += temp_range.EndColumn - temp_range.StartColumn + 1
                     else:
                         next_row += temp_range.EndRow - temp_range.StartRow + 1
+                    merged_count += 1
                 except Exception as exc:
                     self._log(f"LibreOffice 시트 병합 오류 {item}: {exc}")
+                    sheet_errors.append(item)
                 finally:
                     self._close_document(source_doc)
                     if temp_name and temp_name in self._sheet_names(output_doc):
                         self._remove_sheet(output_doc, temp_name)
 
                 self._progress(int((index + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"LibreOffice 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("LibreOffice 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             self._perform_sheet_trim(output_doc)
             self._store_output(uno, output_doc, save_path)

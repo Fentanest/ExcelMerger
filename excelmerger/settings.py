@@ -2,6 +2,7 @@ import base64
 import binascii
 import configparser
 import os
+import sys
 
 try:
     from cryptography.fernet import Fernet
@@ -21,10 +22,47 @@ DEFAULT_OPTIONS = {
 
 
 class SettingsManager:
-    def __init__(self, settings_file="config.ini", key_file="secret.key"):
-        self.settings_file = settings_file
-        self.key_file = key_file
+    def __init__(self, settings_file=None, key_file=None):
+        default_dir = self._default_settings_dir()
+        self.settings_file = settings_file or os.path.join(default_dir, "config.ini")
+        self.key_file = key_file or os.path.join(default_dir, "secret.key")
+        self._legacy_settings_file = (
+            os.path.abspath("config.ini") if settings_file is None else None
+        )
+        self._legacy_key_file = (
+            os.path.abspath("secret.key") if key_file is None else None
+        )
         self._legacy_cipher = None
+
+    def _default_settings_dir(self):
+        if sys.platform == "win32":
+            base_dir = os.environ.get("APPDATA") or os.path.expanduser("~/AppData/Roaming")
+            return os.path.join(base_dir, "ExcelMerger")
+        if sys.platform == "darwin":
+            return os.path.join(
+                os.path.expanduser("~/Library/Application Support"),
+                "ExcelMerger",
+            )
+        base_dir = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
+            os.path.expanduser("~"),
+            ".config",
+        )
+        return os.path.join(base_dir, "excelmerger")
+
+    def _settings_candidates(self):
+        candidates = [(self.settings_file, self.key_file)]
+        if (
+            self._legacy_settings_file
+            and self._legacy_settings_file != self.settings_file
+            and os.path.exists(self._legacy_settings_file)
+        ):
+            candidates.append(
+                (
+                    self._legacy_settings_file,
+                    self._legacy_key_file or self.key_file,
+                )
+            )
+        return candidates
 
     def load_settings(self):
         config = configparser.ConfigParser()
@@ -38,9 +76,20 @@ class SettingsManager:
             "last_save_path": "",
         }
         needs_resave = False
+        loaded_from = self.settings_file
+        legacy_key_file = self.key_file
 
-        if os.path.exists(self.settings_file):
-            config.read(self.settings_file)
+        for candidate_settings, candidate_key in self._settings_candidates():
+            if os.path.exists(candidate_settings):
+                config.read(candidate_settings)
+                loaded_from = candidate_settings
+                legacy_key_file = candidate_key
+                if candidate_settings != self.settings_file:
+                    needs_resave = True
+                break
+
+        if config.sections():
+            self.key_file = legacy_key_file
 
             if "Passwords" in config:
                 global_password, migrated_global = self._decode_password(
@@ -83,7 +132,16 @@ class SettingsManager:
 
         if needs_resave:
             self.save_settings(settings)
-            self._remove_legacy_key()
+            if loaded_from != self.settings_file and os.path.exists(loaded_from):
+                try:
+                    os.remove(loaded_from)
+                except OSError:
+                    pass
+            if legacy_key_file != self.key_file and legacy_key_file and os.path.exists(legacy_key_file):
+                try:
+                    os.remove(legacy_key_file)
+                except OSError:
+                    pass
 
         return settings
 
@@ -106,6 +164,10 @@ class SettingsManager:
         config["Options"]["debug_mode"] = str(settings.get("debug_mode", False))
 
         config["Paths"] = {"last_save_path": settings.get("last_save_path", "")}
+
+        settings_dir = os.path.dirname(self.settings_file)
+        if settings_dir:
+            os.makedirs(settings_dir, exist_ok=True)
 
         with open(self.settings_file, "w", encoding="utf-8") as configfile:
             config.write(configfile)

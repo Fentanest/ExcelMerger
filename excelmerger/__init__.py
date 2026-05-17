@@ -1,4 +1,9 @@
 from version import __version__
-from excelmerger.app import main
+
+
+def main():
+    from excelmerger.app import main as gui_main
+
+    return gui_main()
 
 __all__ = ["__version__", "main"]

@@ -23,7 +23,8 @@
 │   ├── settings.py               # config.ini 직렬화 + secret.key 마이그레이션
 │   ├── runtime_paths.py          # PyInstaller 번들/개발 모드 공통 경로 헬퍼
 │   ├── updater.py                # GitHub Releases 자동 업데이트
-│   ├── file_handler.py           # 입력 파일 열기/암호 해제/시트 열거
+│   ├── file_handler.py           # 입력 파일 열기/암호 해제/시트 열거 (GUI/헤드리스 공용)
+│   ├── headless.py               # GUI 없이 병합하는 HeadlessSession + CLI
 │   ├── engines/
 │   │   ├── detector.py           # Excel/LibreOffice/JPype 가용성 감지
 │   │   ├── utils.py              # 시트명 규칙, 매크로 소스 감지
@@ -60,7 +61,7 @@
 | excel     | Microsoft Excel            | `detector.detect_excel().available && win32`  |
 | libre     | LibreOffice                | `detector.detect_libreoffice().available && merger_libre.is_usable()` |
 | jpype     | Java (Apache POI)          | `detector.detect_jpype().available`            |
-| standard  | Python (openpyxl)          | 항상 활성 (런타임에 openpyxl 없으면 폴백)     |
+| standard  | Python (openpyxl)          | `detector.detect_standard().available`        |
 
 `app.py::MainWindow.resolved_engine()` 결정 로직:
 
@@ -81,7 +82,7 @@ options.merge_engine == 특정 엔진
 - 옵션 다이얼로그가 매번 열릴 때 `detect_merge_engines()`로 가용성을 재평가하여 비활성 라디오를 갱신.
 
 ### 핵심 기술 요점
-- **VBA 보존**: `engines/utils.py::has_macro_source`로 입력에 .xlsm이 있는지 판정 → Win32 엔진은 `FileFormat=52`로 저장, UI 파일 다이얼로그 필터도 동적으로 .xlsm 추가 (`app.py::_save_file_filter`).
+- **VBA 보존**: `engines/utils.py::has_macro_source`로 입력에 .xlsm이 있는지 판정 → Win32 Excel 엔진만 `FileFormat=52`로 저장. LibreOffice/POI/standard 엔진은 매크로를 보존하지 않으며 `.xlsx`로 저장.
 - **POI 변환·복사**: `engines/poi.py::convert_to_xlsx`가 .xls/.xlsb/.xlsm/.csv를 읽어 새 XSSFWorkbook으로 재저장. `_copy_sheet`는 셀값/수식/스타일/병합셀/열너비를 `style_cache`/`font_cache`/`data_format_cache`로 중복 생성 없이 복사하며, 같은 캐시는 `convert_to_xlsx`/`merge_*`에서 공유 가능.
 - **JVM 부트스트랩**: `engines/poi.py::_ensure_jvm`이 `runtime_paths.bundled_java_home()`로 `lib/jre`를 우선 탐지 후 시스템 JRE로 폴백. JAR classpath는 `lib/poi/`의 9개 (`poi-5.3.0`, `poi-ooxml-5.3.0`, `poi-ooxml-lite-5.3.0`, `commons-collections4-4.4`, `commons-io-2.16.1`, `commons-compress-1.26.2`, `commons-codec-1.17.1`, `xmlbeans-5.2.1`, `log4j-api-2.24.1`).
 - **LibreOffice 연결**: `engines/libreoffice.py::_ensure_connection`이 `localhost:2002` UNO 소켓에 먼저 접속, 실패하면 `soffice --headless --accept=socket,host=localhost,port=2002;urp;`로 새 인스턴스 기동. PyUNO 모듈은 `_import_uno()`로 지연 로드. 시트 복사는 `XSheets.importSheet`.
@@ -99,7 +100,7 @@ options.merge_engine == 특정 엔진
 - 각 빌드 잡은 PyInstaller 실행 직전에 UPX 5.1.1을 설치 (Windows: GitHub release zip, Linux: amd64_linux tar.xz, macOS: `brew install upx`). `ExcelMerger.spec`의 `upx=True`가 PATH의 upx를 사용해 실행 파일을 압축.
 - Windows 잡은 PyInstaller 직후 `dist/ExcelMerger/ExcelMerger.exe`의 핸들이 풀릴 때까지 최대 120초 폴링 (Defender/UPX/PyInstaller 후처리 잠금 회피).
 - `updater.py`는 onedir 번들을 인지: `sys._MEIPASS == sys.executable의 부모`인지 확인하여 `target_info.type = "bundle"`로 분기, Windows는 `robocopy /MIR`, Linux는 `rm -rf + cp -R`로 디렉터리 통째 교체.
-- 검증 베이스라인: Python 3.13 + JPype1 1.6.0 + OpenJDK 17/21. JPype 1.7.0은 JVM 충돌 이슈로 회피.
+- 검증 베이스라인: Python 3.14 + JPype1 1.7.1 + OpenJDK 21. Linux에서는 단위 테스트, JPype 병합, PyInstaller 빌드를 확인했다. macOS는 JPype wheel이 없을 수 있어 소스 빌드 경로를 탈 수 있다.
 
 ## 개발 워크플로
 

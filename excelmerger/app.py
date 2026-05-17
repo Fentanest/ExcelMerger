@@ -18,7 +18,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
 )
 
-import msoffcrypto
+try:
+    import msoffcrypto
+except ImportError:
+    msoffcrypto = None
 
 from excelmerger.engines.detector import get_available_engines
 from excelmerger.engines.libreoffice import MergerLibre
@@ -27,6 +30,12 @@ from excelmerger.engines.standard import Merger
 from excelmerger.engines.utils import has_macro_source
 from excelmerger.engines.win32 import MergerWin32
 from excelmerger.file_handler import FileHandler
+from excelmerger.file_registry import (
+    build_display_name,
+    build_password_cache_key,
+    normalized_source_path,
+    source_already_added,
+)
 from excelmerger.runtime_paths import resource_path
 from excelmerger.settings import SettingsManager
 from excelmerger.ui.dialogs import OptionsDialog
@@ -79,6 +88,8 @@ class MergeWorker(QThread):
             self._execute_merge(self.engine_key, self.merge_type, self.sheets_to_merge, self.save_path)
             
             if self.encrypt_output and self.output_encryption_password:
+                if msoffcrypto is None:
+                    raise RuntimeError("출력 파일 암호화에는 msoffcrypto-tool이 필요합니다.")
                 self.signals.log.emit("출력 파일 암호화 중...")
                 encrypted_file = io.BytesIO()
                 with open(self.save_path, "rb") as output_stream:
@@ -228,6 +239,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def detect_merge_engines(self):
         self.engine_status = get_available_engines()
+        self.txtLogOutput.append(self.engine_status["standard"]["detail"])
         self.txtLogOutput.append(self.engine_status["excel"]["detail"])
         self.txtLogOutput.append(self.engine_status["libre"]["detail"])
         self.txtLogOutput.append(self.engine_status["jpype"]["detail"])
@@ -242,13 +254,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if engine_key == "jpype":
             return self.engine_status.get("jpype", {}).get("available", False)
         if engine_key == "standard":
-            return self.merger.is_available()
+            return self.engine_status.get("standard", {}).get("available", False) and self.merger.is_available()
         return False
+
+    def _best_available_engine(self, requested=None):
+        requested = requested or self.options.get("merge_engine", "auto")
+        if requested != "auto" and self._engine_runtime_available(requested):
+            return requested
+        for candidate in self.AUTO_PRIORITY:
+            if self._engine_runtime_available(candidate):
+                return candidate
+        return None
 
     def _reconcile_engine_selection(self):
         """Demote a stored selection to 'auto' when its runtime is no longer present."""
         requested = self.options.get("merge_engine", "auto")
-        if requested in {"auto", "standard"}:
+        if requested == "auto":
             return
         if not self._engine_runtime_available(requested):
             self.txtLogOutput.append(
@@ -268,18 +289,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 f"'{self._engine_label(requested)}' 엔진을 사용할 수 없어 자동 폴백을 시도합니다."
             )
 
-        for candidate in self.AUTO_PRIORITY:
-            if self._engine_runtime_available(candidate):
-                return candidate
+        candidate = self._best_available_engine("auto")
+        if candidate is not None:
+            return candidate
 
         raise RuntimeError("사용 가능한 병합 엔진을 찾을 수 없습니다.")
 
     def suggested_output_extension(self, engine_key=None):
-        if engine_key is None:
-            engine_key = self.options.get("merge_engine", "auto")
-            if engine_key == "auto" and self._engine_runtime_available("excel"):
-                engine_key = "excel"
-        if engine_key == "excel" and has_macro_source(self.file_info):
+        actual_engine = self._best_available_engine(engine_key or self.options.get("merge_engine", "auto"))
+        if actual_engine == "excel" and has_macro_source(self.file_info):
             return ".xlsm"
         return ".xlsx"
 
@@ -392,7 +410,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.output_encryption_password = settings["output_encryption_password"]
         self.encrypt_output = settings["encrypt_output"]
         self.options = settings["options"]
-        self.options.setdefault("merge_engine", "standard")
+        self.options.setdefault("merge_engine", "auto")
         self.debug_mode = settings["debug_mode"]
 
         self.actionActivateDebugMode.setChecked(self.debug_mode)
@@ -559,20 +577,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def add_files(self, files):
         self.stop_asking_for_passwords = False
         for file_path in files:
-            basename = os.path.basename(file_path)
-            if basename in self.file_info:
+            normalized_path = normalized_source_path(file_path)
+            if source_already_added(normalized_path, self.file_info):
                 continue
+            display_name = build_display_name(normalized_path, self.file_info)
 
-            if file_path.lower().endswith((".xlsx", ".xls", ".xlsb", ".xlsm", ".csv")):
-                sheet_names, processed_file_path = self.file_handler.get_sheet_names(file_path)
+            if normalized_path.lower().endswith((".xlsx", ".xls", ".xlsb", ".xlsm", ".csv")):
+                sheet_names, processed_file_path = self.file_handler.get_sheet_names(normalized_path)
                 if sheet_names is not None and processed_file_path is not None:
-                    self.file_info[basename] = {
-                        "original_path": file_path,
+                    self.file_info[display_name] = {
+                        "display_name": display_name,
+                        "original_path": normalized_path,
                         "processed_path": processed_file_path,
                         "sheets": sheet_names,
+                        "password_key": build_password_cache_key(normalized_path),
                     }
                 else:
-                    self.txtLogOutput.append(f"파일을 열 수 없어 목록에서 제외합니다: {basename}")
+                    self.txtLogOutput.append(f"파일을 열 수 없어 목록에서 제외합니다: {display_name}")
 
         self.file_list_model.setStringList(list(self.file_info.keys()))
         self.update_sheet_selection_mode()
@@ -595,8 +616,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         basenames_to_remove = [self.file_list_model.data(index, 0) for index in indexes]
         for basename in basenames_to_remove:
-            self.file_info.pop(basename, None)
-            self.file_passwords.pop(basename, None)
+            info = self.file_info.pop(basename, None)
+            if info:
+                self.file_passwords.pop(info.get("password_key"), None)
 
         self.file_list_model.setStringList(list(self.file_info.keys()))
         self.sheet_list_model.setStringList([])
@@ -671,7 +693,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("저장 경로가 지정되지 않았습니다.")
             return
 
-        directory = os.path.dirname(path)
+        directory = os.path.dirname(path) or os.getcwd()
         if not os.path.isdir(directory):
             self.txtLogOutput.append(f"디렉토리를 찾을 수 없습니다: {directory}")
             return
@@ -759,6 +781,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("저장 경로를 지정하세요.")
             return
 
+        if self.encrypt_output and msoffcrypto is None:
+            self.txtLogOutput.append("출력 파일 암호화에는 msoffcrypto-tool이 필요합니다.")
+            return
+
         self.detect_merge_engines()
 
         try:
@@ -767,7 +793,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             save_path = self.normalize_save_path(save_path, engine_key)
             self.lineEditSavePath.setText(save_path)
 
-            save_dir = os.path.dirname(save_path)
+            save_dir = os.path.dirname(save_path) or os.getcwd()
             if not os.path.isdir(save_dir):
                 self.txtLogOutput.append(f"경고: 저장 경로의 디렉토리가 존재하지 않습니다: {save_dir}")
                 return
@@ -778,6 +804,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.progressBar.setValue(0)
             self.txtLogOutput.clear()
             self.txtLogOutput.append(f"{self._engine_label(engine_key)} 엔진으로 병합을 시작합니다.")
+            if has_macro_source(self.file_info) and engine_key != "excel":
+                self.txtLogOutput.append(
+                    "경고: 현재 엔진은 VBA/매크로를 보존하지 않습니다. 결과 파일은 .xlsx로 저장됩니다."
+                )
 
             if self.debug_mode:
                 self.txtLogOutput.append(f"DEBUG: file_passwords at start of merge: {self.file_passwords}")
@@ -813,6 +843,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         subprocess.run(["xdg-open", os.path.dirname(os.path.abspath(save_path))], check=False)
                 except Exception as exc:
                     self.txtLogOutput.append(f"저장 경로를 열 수 없습니다: {exc}")
+        else:
+            self.txtLogOutput.append(f"병합 실패: {save_path_or_error}")
 
     def check_for_updates(self):
         update_info = check_for_update(self.app_version)

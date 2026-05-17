@@ -2,6 +2,7 @@ import os
 from copy import copy
 
 from excelmerger.engines.utils import build_output_sheet_name
+from excelmerger.file_registry import source_file_name
 
 try:
     import openpyxl
@@ -58,12 +59,16 @@ class Merger:
             self._log("수식을 값으로 변환하며 병합을 시작합니다...")
 
         total_sheets = len(sheets_to_merge)
+        sheet_errors = []
+        merged_count = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
             file_path = self.main_window.file_info.get(file_name, {}).get('processed_path')
+            info = self.main_window.file_info.get(file_name, {})
 
             if not file_path:
                 self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                sheet_errors.append(item)
                 continue
 
             try:
@@ -79,17 +84,27 @@ class Merger:
                     source_sheet = source_workbook.sheet_by_name(sheet_name)
 
                 new_sheet_name = build_output_sheet_name(
-                    file_name,
+                    source_file_name(info, file_name),
                     sheet_name,
                     self.main_window.options.get('sheet_name_rule', 'OriginalBoth'),
                     output_workbook.sheetnames,
                 )
                 output_sheet = output_workbook.create_sheet(title=new_sheet_name)
                 self._copy_sheet_data(source_sheet, output_sheet, file_name=file_name)
+                merged_count += 1
             except Exception as exc:
                 self._log(f"시트 복사 오류 {item}: {exc}")
+                sheet_errors.append(item)
 
             self._progress(int((i + 1) / total_sheets * 100))
+
+        if sheet_errors:
+            preview = ", ".join(sheet_errors[:3])
+            if len(sheet_errors) > 3:
+                preview += ", ..."
+            raise RuntimeError(f"표준 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+        if merged_count == 0:
+            raise RuntimeError("표준 엔진으로 병합할 수 있는 시트가 없습니다.")
 
         self._perform_sheet_trim(output_workbook)
         output_workbook.save(save_path)
@@ -112,6 +127,8 @@ class Merger:
 
         total_sheets = len(sheets_to_merge)
         last_pos = 0
+        sheet_errors = []
+        merged_count = 0
         for i, item in enumerate(sheets_to_merge):
             file_name, sheet_name = item.split('/', 1)
             self._status(f'{item} 병합 중...')
@@ -119,6 +136,7 @@ class Merger:
             file_path = self.main_window.file_info.get(file_name, {}).get('processed_path')
             if not file_path:
                 self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                sheet_errors.append(item)
                 continue
 
             try:
@@ -139,10 +157,20 @@ class Merger:
                 else:
                     self._copy_sheet_data(source_sheet, output_sheet, start_row=last_pos + 1, file_name=file_name)
                     last_pos = output_sheet.max_row
+                merged_count += 1
             except Exception as exc:
                 self._log(f"시트 병합 오류 {item}: {exc}")
+                sheet_errors.append(item)
 
             self._progress(int((i + 1) / total_sheets * 100))
+
+        if sheet_errors:
+            preview = ", ".join(sheet_errors[:3])
+            if len(sheet_errors) > 3:
+                preview += ", ..."
+            raise RuntimeError(f"표준 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+        if merged_count == 0:
+            raise RuntimeError("표준 엔진으로 병합할 수 있는 시트가 없습니다.")
 
         self._perform_sheet_trim(output_workbook)
         output_workbook.save(save_path)

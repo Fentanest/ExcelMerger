@@ -30,24 +30,15 @@ def _status(key, label, available, detail="", path=""):
 
 
 def detect_excel():
-    if sys.platform == "darwin":
-        excel_app = "/Applications/Microsoft Excel.app"
-        if os.path.exists(excel_app):
+    if sys.platform != "win32":
+        if sys.platform == "darwin" and os.path.exists("/Applications/Microsoft Excel.app"):
             return _status(
                 "excel",
                 "Microsoft Excel 이용",
-                True,
-                "고품질 병합 사용 가능: Microsoft Excel 감지",
-                excel_app,
+                False,
+                "macOS에 Excel.app은 있지만 현재 직접 엔진은 Windows COM만 지원합니다.",
+                "/Applications/Microsoft Excel.app",
             )
-        return _status(
-            "excel",
-            "Microsoft Excel 이용",
-            False,
-            "macOS에서 Microsoft Excel.app을 찾을 수 없습니다.",
-        )
-
-    if sys.platform != "win32":
         return _status(
             "excel",
             "Microsoft Excel 이용",
@@ -84,6 +75,33 @@ def detect_excel():
         )
 
 
+def detect_standard():
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError:
+        return _status(
+            "standard",
+            "Python (openpyxl)",
+            False,
+            "openpyxl이 설치되어 있지 않아 Python 표준 엔진을 사용할 수 없습니다.",
+        )
+
+    return _status(
+        "standard",
+        "Python (openpyxl)",
+        True,
+        "Python(openpyxl) 표준 엔진 사용 가능",
+    )
+
+
+def _pyuno_detail():
+    try:
+        import uno  # noqa: F401
+        return ""
+    except ImportError:
+        return "PyUNO 브리지가 없어 LibreOffice 엔진을 직접 실행할 수 없습니다."
+
+
 def detect_libreoffice():
     candidates = []
 
@@ -116,11 +134,20 @@ def detect_libreoffice():
 
     for candidate in candidates:
         if candidate and os.path.exists(candidate):
+            pyuno_detail = _pyuno_detail()
+            if pyuno_detail:
+                return _status(
+                    "libre",
+                    "LibreOffice 이용",
+                    False,
+                    f"LibreOffice는 감지되었지만 {pyuno_detail}",
+                    candidate,
+                )
             return _status(
                 "libre",
                 "LibreOffice 이용",
                 True,
-                "LibreOffice 감지. PyUNO 브리지가 있으면 LibreOffice 엔진을 사용할 수 있습니다.",
+                "LibreOffice와 PyUNO 브리지가 모두 감지되었습니다.",
                 candidate,
             )
 
@@ -201,7 +228,7 @@ def get_available_engines():
         return _engine_cache_data
 
     status = {
-        "standard": _status("standard", "표준 병합", True, "표준 병합은 항상 사용 가능합니다."),
+        "standard": detect_standard(),
         "excel": detect_excel(),
         "libre": detect_libreoffice(),
         "jpype": detect_jpype(),

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.14"
   JAVA_VERSION: "21"
   UPX_VERSION: "5.1.1"
   POI_VERSION: "5.3.0"
@@ -53,8 +53,9 @@ jobs:
         shell: powershell
         run: |
           python -m venv venv
-          .\venv\Scripts\python.exe -m pip install --upgrade pip
+          .\venv\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
           .\venv\Scripts\pip.exe install -r requirements.txt pyinstaller
+          .\venv\Scripts\python.exe -m pip check
 
       - name: Download Apache POI jars
         shell: powershell
@@ -83,6 +84,12 @@ jobs:
           Remove-Item -Recurse -Force lib\jre -ErrorAction SilentlyContinue
           Copy-Item -Recurse -Force $env:JAVA_HOME lib\jre
 
+      - name: Run unit tests
+        if: ${{ !matrix.include_jre }}
+        shell: powershell
+        run: |
+          .\venv\Scripts\python.exe -m unittest discover -s tests -q
+
       - name: Install UPX
         shell: powershell
         run: |
@@ -101,7 +108,7 @@ jobs:
         shell: powershell
         run: |
           $env:EXCELMERGER_INCLUDE_JRE = if ("${{ matrix.include_jre }}" -eq "true") { "1" } else { "0" }
-          .\venv\Scripts\pyinstaller.exe ExcelMerger.spec
+          .\venv\Scripts\pyinstaller.exe -y ExcelMerger.spec
 
       - name: Wait for build artifacts to release
         shell: powershell

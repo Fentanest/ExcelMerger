@@ -149,10 +149,8 @@ class OptionsDialog(QDialog, Ui_OptionsDialog):
         )
 
     def _populate_engine_section(self, engine_status, current_options):
-        # auto/standard always selectable; rest depend on detection.
-        always_enabled = {"auto", "standard"}
         for key, radio in self._engine_buttons.items():
-            if key in always_enabled:
+            if key == "auto":
                 radio.setEnabled(True)
             else:
                 radio.setEnabled(bool(engine_status.get(key, {}).get("available", False)))

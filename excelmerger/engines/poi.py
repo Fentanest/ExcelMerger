@@ -13,14 +13,16 @@ except Exception:  # pragma: no cover - used for headless smoke tests
 
 from excelmerger.engines.detector import REQUIRED_POI_JARS, detect_jpype
 from excelmerger.engines.utils import build_output_sheet_name
+from excelmerger.file_registry import source_file_name
 from excelmerger.runtime_paths import bundled_java_home, poi_jar_dir
 
 
 class MergerPOI:
-    def __init__(self, main_window=None, log_callback=None, progress_callback=None):
+    def __init__(self, main_window=None, log_callback=None, progress_callback=None, status_callback=None):
         self.main_window = main_window
         self.log_callback = log_callback
         self.progress_callback = progress_callback
+        self.status_callback = status_callback
         self._jpype = None
         self._WorkbookFactory = None
         self._XSSFWorkbook = None
@@ -38,6 +40,12 @@ class MergerPOI:
             self.progress_callback(percent)
         elif self.main_window and hasattr(self.main_window, "progressBar"):
             self.main_window.progressBar.setValue(percent)
+
+    def _status(self, text):
+        if self.status_callback:
+            self.status_callback(text)
+        elif self.main_window and hasattr(self.main_window, "lblCurrentFile"):
+            self.main_window.lblCurrentFile.setText(text)
 
     def is_available(self):
         return detect_jpype()["available"]
@@ -119,40 +127,57 @@ class MergerPOI:
 
         try:
             total_sheets = len(sheets_to_merge)
+            sheet_errors = []
+            merged_count = 0
             for index, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split("/", 1)
-                file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
+                info = self.main_window.file_info.get(file_name, {})
+                file_path = info.get("processed_path")
                 if not file_path:
                     self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                    sheet_errors.append(item)
                     continue
 
-                new_sheet_name = build_output_sheet_name(
-                    file_name,
-                    sheet_name,
-                    self.main_window.options.get("sheet_name_rule", "OriginalBoth"),
-                    existing_names,
-                )
-                target_sheet = output_workbook.createSheet(new_sheet_name)
+                try:
+                    new_sheet_name = build_output_sheet_name(
+                        source_file_name(info, file_name),
+                        sheet_name,
+                        self.main_window.options.get("sheet_name_rule", "OriginalBoth"),
+                        existing_names,
+                    )
+                    target_sheet = output_workbook.createSheet(new_sheet_name)
 
-                if file_path.lower().endswith(".csv"):
-                    self._copy_csv_to_sheet(file_path, target_sheet)
-                else:
-                    source_workbook = buffered_stream = file_stream = None
-                    try:
-                        source_workbook, buffered_stream, file_stream = self._open_workbook(file_path)
-                        source_sheet = source_workbook.getSheet(sheet_name)
-                        if source_sheet is None:
-                            raise RuntimeError(f"시트를 찾을 수 없습니다: {sheet_name}")
-                        self._copy_sheet(
-                            source_sheet,
-                            target_sheet,
-                            only_values=self.main_window.options.get("only_value_copy", False),
-                        )
-                    finally:
-                        self._close_quietly(source_workbook, buffered_stream, file_stream)
+                    if file_path.lower().endswith(".csv"):
+                        self._copy_csv_to_sheet(file_path, target_sheet)
+                    else:
+                        source_workbook = buffered_stream = file_stream = None
+                        try:
+                            source_workbook, buffered_stream, file_stream = self._open_workbook(file_path)
+                            source_sheet = source_workbook.getSheet(sheet_name)
+                            if source_sheet is None:
+                                raise RuntimeError(f"시트를 찾을 수 없습니다: {sheet_name}")
+                            self._copy_sheet(
+                                source_sheet,
+                                target_sheet,
+                                only_values=self.main_window.options.get("only_value_copy", False),
+                            )
+                        finally:
+                            self._close_quietly(source_workbook, buffered_stream, file_stream)
 
-                existing_names.add(new_sheet_name)
+                    existing_names.add(new_sheet_name)
+                    merged_count += 1
+                except Exception as exc:
+                    self._log(f"POI 시트 복사 오류 {item}: {exc}")
+                    sheet_errors.append(item)
                 self._progress(int((index + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"POI 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("POI 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             self._perform_sheet_trim(output_workbook)
             self._save_workbook(output_workbook, save_path)
@@ -174,45 +199,61 @@ class MergerPOI:
 
         try:
             total_sheets = len(sheets_to_merge)
+            sheet_errors = []
+            merged_count = 0
             for index, item in enumerate(sheets_to_merge):
                 file_name, sheet_name = item.split("/", 1)
                 file_path = self.main_window.file_info.get(file_name, {}).get("processed_path")
-                self.main_window.lblCurrentFile.setText(f"{item} 병합 중...")
+                self._status(f"{item} 병합 중...")
 
                 if not file_path:
                     self._log(f"파일을 찾을 수 없습니다: {file_name}")
+                    sheet_errors.append(item)
                     continue
 
-                if file_path.lower().endswith(".csv"):
-                    rows_used, cols_used = self._copy_csv_to_sheet(
-                        file_path,
-                        output_sheet,
-                        start_row=next_row,
-                        start_col=next_col,
-                    )
-                else:
-                    source_workbook = buffered_stream = file_stream = None
-                    try:
-                        source_workbook, buffered_stream, file_stream = self._open_workbook(file_path)
-                        source_sheet = source_workbook.getSheet(sheet_name)
-                        if source_sheet is None:
-                            raise RuntimeError(f"시트를 찾을 수 없습니다: {sheet_name}")
-                        rows_used, cols_used = self._copy_sheet(
-                            source_sheet,
+                try:
+                    if file_path.lower().endswith(".csv"):
+                        rows_used, cols_used = self._copy_csv_to_sheet(
+                            file_path,
                             output_sheet,
                             start_row=next_row,
                             start_col=next_col,
-                            only_values=self.main_window.options.get("only_value_copy", False),
                         )
-                    finally:
-                        self._close_quietly(source_workbook, buffered_stream, file_stream)
+                    else:
+                        source_workbook = buffered_stream = file_stream = None
+                        try:
+                            source_workbook, buffered_stream, file_stream = self._open_workbook(file_path)
+                            source_sheet = source_workbook.getSheet(sheet_name)
+                            if source_sheet is None:
+                                raise RuntimeError(f"시트를 찾을 수 없습니다: {sheet_name}")
+                            rows_used, cols_used = self._copy_sheet(
+                                source_sheet,
+                                output_sheet,
+                                start_row=next_row,
+                                start_col=next_col,
+                                only_values=self.main_window.options.get("only_value_copy", False),
+                            )
+                        finally:
+                            self._close_quietly(source_workbook, buffered_stream, file_stream)
 
-                if axis == "horizontal":
-                    next_col += cols_used
-                else:
-                    next_row += rows_used
+                    if axis == "horizontal":
+                        next_col += cols_used
+                    else:
+                        next_row += rows_used
 
+                    merged_count += 1
+                except Exception as exc:
+                    self._log(f"POI 시트 병합 오류 {item}: {exc}")
+                    sheet_errors.append(item)
                 self._progress(int((index + 1) / total_sheets * 100))
+
+            if sheet_errors:
+                preview = ", ".join(sheet_errors[:3])
+                if len(sheet_errors) > 3:
+                    preview += ", ..."
+                raise RuntimeError(f"POI 엔진에서 {len(sheet_errors)}개 항목 병합 실패: {preview}")
+            if merged_count == 0:
+                raise RuntimeError("POI 엔진으로 병합할 수 있는 시트가 없습니다.")
 
             self._perform_sheet_trim(output_workbook)
             self._save_workbook(output_workbook, save_path)
@@ -643,4 +684,3 @@ class MergerPOI:
                     row.removeCell(cell)
 
         return max(0, max_col_count - count)
-
