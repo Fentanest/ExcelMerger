@@ -1,6 +1,7 @@
 import os
 import tempfile
 import time
+from contextlib import suppress
 from excelmerger.engines.utils import build_output_sheet_name, has_macro_source
 from excelmerger.file_registry import source_file_name
 
@@ -79,8 +80,57 @@ class MergerWin32:
         return has_macro_source(self.main_window.file_info)
 
     def _save_workbook(self, workbook, save_path):
+        abs_path = os.path.abspath(save_path)
         file_format = 52 if self._macro_output_enabled() else 51
-        workbook.SaveAs(os.path.abspath(save_path), FileFormat=file_format)
+        with suppress(OSError):
+            os.remove(abs_path)
+
+        save_kwargs = {
+            "FileFormat": file_format,
+            "ConflictResolution": 2,
+            "Local": True,
+        }
+        try:
+            workbook.SaveAs(abs_path, **save_kwargs)
+        except TypeError:
+            workbook.SaveAs(abs_path, FileFormat=file_format)
+
+        if self._wait_for_saved_file(abs_path):
+            with suppress(Exception):
+                workbook.Saved = True
+            return
+
+        fd, temp_copy_path = tempfile.mkstemp(
+            suffix=os.path.splitext(abs_path)[1] or ".xlsx",
+            prefix="excelmerger_savecopy_",
+        )
+        os.close(fd)
+        with suppress(OSError):
+            os.remove(temp_copy_path)
+
+        try:
+            workbook.SaveCopyAs(temp_copy_path)
+            if self._wait_for_saved_file(temp_copy_path):
+                os.replace(temp_copy_path, abs_path)
+                with suppress(Exception):
+                    workbook.Saved = True
+                return
+        finally:
+            if os.path.exists(temp_copy_path):
+                with suppress(OSError):
+                    os.remove(temp_copy_path)
+
+        raise RuntimeError(f"Excel 저장이 완료되지 않았습니다: {abs_path}")
+
+    def _wait_for_saved_file(self, path, timeout=5.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if os.path.exists(path):
+                with suppress(OSError):
+                    if os.path.getsize(path) >= 0:
+                        return True
+            time.sleep(0.1)
+        return os.path.exists(path)
 
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
@@ -158,7 +208,7 @@ class MergerWin32:
 
             self.perform_sheet_trim_win32(merged_workbook, excel)
             self._save_workbook(merged_workbook, save_path)
-            merged_workbook.Close(SaveChanges=False)
+            merged_workbook.Close(SaveChanges=True)
 
         except Exception as e:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")
@@ -235,7 +285,7 @@ class MergerWin32:
 
             self.perform_sheet_trim_win32(output_workbook, excel)
             self._save_workbook(output_workbook, save_path)
-            output_workbook.Close(SaveChanges=False)
+            output_workbook.Close(SaveChanges=True)
 
         except Exception as e:
             self.main_window.txtLogOutput.append(f"win32 병합 오류: {e}")

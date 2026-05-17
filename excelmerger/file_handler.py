@@ -285,23 +285,10 @@ class FileHandler:
             if lower_path.endswith('.csv'):
                 return [os.path.splitext(file_name)[0]], processed_file_path
 
-            if lower_path.endswith('.xlsb'):
-                converted_path = self.convert_to_xlsx(processed_file_path)
-                if not converted_path:
-                    return None, None
-                processed_file_path = converted_path
-                lower_path = processed_file_path.lower()
-
-            if hasattr(self.main_window, 'merger_poi') and self.main_window.merger_poi.is_available():
-                try:
-                    return self.main_window.merger_poi.get_sheet_names(processed_file_path), processed_file_path
-                except Exception as exc:
-                    self._log(f"JPype 시트 목록 읽기 실패, 표준 모드로 전환합니다: {exc}")
-
             if lower_path.endswith('.xlsm'):
                 if openpyxl is None:
                     raise RuntimeError("openpyxl이 설치되어 있지 않습니다.")
-                wb = openpyxl.load_workbook(processed_file_path, read_only=False, keep_vba=True, data_only=True)
+                wb = openpyxl.load_workbook(processed_file_path, read_only=True, data_only=True)
                 sheet_names = wb.sheetnames
                 wb.close()
                 return sheet_names, processed_file_path
@@ -322,6 +309,12 @@ class FileHandler:
                     raise RuntimeError("pyxlsb가 설치되어 있지 않습니다.")
                 with open_xlsb(processed_file_path) as wb:
                     return wb.sheets, processed_file_path
+
+            if hasattr(self.main_window, 'merger_poi') and self.main_window.merger_poi.is_available():
+                try:
+                    return self.main_window.merger_poi.get_sheet_names(processed_file_path), processed_file_path
+                except Exception as exc:
+                    self._log(f"JPype 시트 목록 읽기 실패, 표준 모드로 전환합니다: {exc}")
             else:
                 self._log(f"지원하지 않는 파일 형식입니다: {file_name}")
                 return None, None

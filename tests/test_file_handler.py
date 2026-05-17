@@ -1,4 +1,11 @@
+import pathlib
+import tempfile
 import unittest
+
+try:
+    from openpyxl import Workbook
+except ImportError:  # pragma: no cover - test environment without openpyxl
+    Workbook = None
 
 from excelmerger.file_handler import FileHandler
 
@@ -30,18 +37,22 @@ class _MainWindowStub:
 
 
 class FileHandlerTests(unittest.TestCase):
-    def test_get_sheet_names_converts_xlsb_before_poi(self):
+    @unittest.skipUnless(Workbook is not None, "openpyxl not installed")
+    def test_get_sheet_names_uses_openpyxl_for_xlsx_without_starting_poi(self):
         main_window = _MainWindowStub()
         handler = FileHandler(main_window)
 
-        converted_path = "/tmp/converted.xlsx"
-        handler.convert_to_xlsx = lambda path: converted_path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = pathlib.Path(tmpdir) / "source.xlsx"
+            workbook = Workbook()
+            workbook.active.title = "Sheet1"
+            workbook.save(source_path)
 
-        sheet_names, processed_path = handler.get_sheet_names("/tmp/source.xlsb")
+            sheet_names, processed_path = handler.get_sheet_names(str(source_path))
 
-        self.assertEqual(["Sheet1"], sheet_names)
-        self.assertEqual(converted_path, processed_path)
-        self.assertEqual([converted_path], main_window.merger_poi.calls)
+            self.assertEqual(["Sheet1"], sheet_names)
+            self.assertEqual(str(source_path), processed_path)
+            self.assertEqual([], main_window.merger_poi.calls)
 
 
 if __name__ == "__main__":

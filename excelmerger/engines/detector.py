@@ -220,10 +220,14 @@ _ENGINE_CACHE_TTL = 5.0
 _engine_cache_data = None
 _engine_cache_time = 0.0
 
-def get_available_engines():
+def get_available_engines(force_refresh=False):
     global _engine_cache_data, _engine_cache_time
     now = time.time()
-    
+
+    if force_refresh:
+        _engine_cache_data = None
+        _engine_cache_time = 0.0
+
     if _engine_cache_data is not None and (now - _engine_cache_time) < _ENGINE_CACHE_TTL:
         return _engine_cache_data
 

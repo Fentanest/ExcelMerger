@@ -1,3 +1,4 @@
+import base64
 import pathlib
 import tempfile
 import unittest
@@ -70,6 +71,75 @@ class MergerPOITests(unittest.TestCase):
 
             merged = load_workbook(output_path, data_only=False)
             self.assertEqual("=SUM(A1:A2)", merged["formula_Sheet1"]["A3"].value)
+            merged.close()
+
+    def test_merge_as_sheets_preserves_fill_color(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = pathlib.Path(tmpdir) / "color.xlsx"
+            output_path = pathlib.Path(tmpdir) / "merged.xlsx"
+
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Sheet1"
+            sheet["A1"] = "color"
+
+            from openpyxl.styles import PatternFill
+
+            sheet["A1"].fill = PatternFill(fill_type="solid", fgColor="DCE6F1")
+            workbook.save(source_path)
+
+            file_info = {
+                "color.xlsx": {
+                    "processed_path": str(source_path),
+                }
+            }
+            merger = MergerPOI(_MainWindowStub(file_info))
+            merger.merge_as_sheets(["color.xlsx/Sheet1"], str(output_path))
+
+            merged = load_workbook(output_path, data_only=False)
+            color = merged["color_Sheet1"]["A1"].fill.fgColor
+            self.assertEqual("rgb", color.type)
+            self.assertTrue(color.rgb.endswith("DCE6F1"))
+            merged.close()
+
+    def test_merge_as_sheets_preserves_embedded_picture(self):
+        png_bytes = base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ioAAAAASUVORK5CYII="
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            source_path = pathlib.Path(tmpdir) / "image.xlsx"
+            output_path = pathlib.Path(tmpdir) / "merged.xlsx"
+
+            merger = MergerPOI(_MainWindowStub({}))
+            merger._ensure_jvm()
+
+            workbook = merger._XSSFWorkbook()
+            try:
+                sheet = workbook.createSheet("Sheet1")
+                sheet.createRow(0).createCell(0).setCellValue("image")
+                drawing = sheet.createDrawingPatriarch()
+                anchor = workbook.getCreationHelper().createClientAnchor()
+                anchor.setCol1(1)
+                anchor.setCol2(2)
+                anchor.setRow1(1)
+                anchor.setRow2(2)
+                picture_index = workbook.addPicture(png_bytes, 6)
+                drawing.createPicture(anchor, picture_index)
+                merger._save_workbook(workbook, str(source_path))
+            finally:
+                workbook.close()
+
+            file_info = {
+                "image.xlsx": {
+                    "processed_path": str(source_path),
+                }
+            }
+            merger = MergerPOI(_MainWindowStub(file_info))
+            merger.merge_as_sheets(["image.xlsx/Sheet1"], str(output_path))
+
+            merged = load_workbook(output_path, data_only=False)
+            self.assertEqual(1, len(getattr(merged["image_Sheet1"], "_images", [])))
             merged.close()
 
 

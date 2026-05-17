@@ -344,6 +344,13 @@ class MergerPOI:
                 )
             )
 
+        self._copy_sheet_drawings(
+            source_sheet,
+            target_sheet,
+            start_row=start_row,
+            start_col=start_col,
+        )
+
         if source_sheet.getPhysicalNumberOfRows() == 0 and source_sheet.getNumMergedRegions() == 0:
             return 0, 0
 
@@ -399,17 +406,70 @@ class MergerPOI:
         target_style = style_cache.get(style_key)
         if target_style is None:
             target_style = target_workbook.createCellStyle()
-            self._apply_style_properties(
-                source_workbook,
-                source_style,
-                target_workbook,
-                target_style,
-                font_cache,
-                data_format_cache,
-            )
+            with suppress(Exception):
+                target_style.cloneStyleFrom(source_style)
+            if target_style.getFillPattern() != source_style.getFillPattern():
+                self._apply_style_properties(
+                    source_workbook,
+                    source_style,
+                    target_workbook,
+                    target_style,
+                    font_cache,
+                    data_format_cache,
+                )
             style_cache[style_key] = target_style
 
         target_cell.setCellStyle(target_style)
+
+    def _copy_sheet_drawings(self, source_sheet, target_sheet, *, start_row=0, start_col=0):
+        source_drawing = None
+        with suppress(Exception):
+            source_drawing = source_sheet.getDrawingPatriarch()
+        if source_drawing is None:
+            return
+
+        shapes = []
+        with suppress(Exception):
+            shapes = list(source_drawing.getShapes())
+        if not shapes:
+            return
+
+        target_drawing = None
+        with suppress(Exception):
+            target_drawing = target_sheet.getDrawingPatriarch()
+        if target_drawing is None:
+            target_drawing = target_sheet.createDrawingPatriarch()
+
+        target_workbook = target_sheet.getWorkbook()
+        creation_helper = target_workbook.getCreationHelper()
+
+        for shape in shapes:
+            try:
+                picture_data = shape.getPictureData()
+                source_anchor = shape.getClientAnchor()
+            except Exception:
+                continue
+
+            if picture_data is None or source_anchor is None:
+                continue
+
+            target_anchor = creation_helper.createClientAnchor()
+            target_anchor.setCol1(source_anchor.getCol1() + start_col)
+            target_anchor.setCol2(source_anchor.getCol2() + start_col)
+            target_anchor.setRow1(source_anchor.getRow1() + start_row)
+            target_anchor.setRow2(source_anchor.getRow2() + start_row)
+            target_anchor.setDx1(source_anchor.getDx1())
+            target_anchor.setDx2(source_anchor.getDx2())
+            target_anchor.setDy1(source_anchor.getDy1())
+            target_anchor.setDy2(source_anchor.getDy2())
+            with suppress(Exception):
+                target_anchor.setAnchorType(source_anchor.getAnchorType())
+
+            picture_index = target_workbook.addPicture(
+                picture_data.getData(),
+                picture_data.getPictureType(),
+            )
+            target_drawing.createPicture(target_anchor, picture_index)
 
     def _apply_style_properties(
         self,

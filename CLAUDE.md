@@ -97,6 +97,7 @@ options.merge_engine == 특정 엔진
   - **build-windows / build-linux**: `dist/ExcelMerger/` 폴더를 그대로 `actions/upload-artifact`로 업로드 (확장자 없는 이름). 사전 zip 단계 없음 → 다운로드 시 GitHub의 자동 zip 래핑 1회만 적용되어 zip-in-zip 미발생.
   - **build-macos-x64 / build-macos-arm64**: `hdiutil`로 DMG 생성 후 단일 파일로 업로드.
   - **release** (build.yml만): 모든 아티팩트 다운로드 후 플랫폼 패턴으로 재포장 — Windows는 `zip -r`, Linux는 `tar -czf`, macOS는 DMG 패스스루. 4 플랫폼 × `include_jre` 매트릭스 = 8 산출물.
+- self-hosted **macOS x64** 잡은 `actions/setup-python` 대신 러너에 이미 설치된 `python3.14`를 직접 찾는다. 기본 후보 경로는 `/Library/Frameworks/Python.framework/Versions/3.14/bin/python3.14`, `/usr/local/bin/python3.14`, `/opt/homebrew/bin/python3.14`이며, 필요하면 repository variable `MACOS_X64_PYTHON`으로 경로를 강제할 수 있다.
 - 각 빌드 잡은 PyInstaller 실행 직전에 UPX 5.1.1을 설치 (Windows: GitHub release zip, Linux: amd64_linux tar.xz, macOS: `brew install upx`). `ExcelMerger.spec`의 `upx=True`가 PATH의 upx를 사용해 실행 파일을 압축.
 - Windows 잡은 PyInstaller 직후 `dist/ExcelMerger/ExcelMerger.exe`의 핸들이 풀릴 때까지 최대 120초 폴링 (Defender/UPX/PyInstaller 후처리 잠금 회피).
 - `updater.py`는 onedir 번들을 인지: `sys._MEIPASS == sys.executable의 부모`인지 확인하여 `target_info.type = "bundle"`로 분기, Windows는 `robocopy /MIR`, Linux는 `rm -rf + cp -R`로 디렉터리 통째 교체.

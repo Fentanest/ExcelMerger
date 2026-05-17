@@ -190,7 +190,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self._connect_signals()
         self.load_and_apply_settings()
-        self.detect_merge_engines()
+        self.detect_merge_engines(log_output=True, force_refresh=True)
         self._reconcile_engine_selection()
 
         self.radioButtonChoice.setChecked(True)
@@ -237,12 +237,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     AUTO_PRIORITY = ("excel", "libre", "jpype", "standard")
 
-    def detect_merge_engines(self):
-        self.engine_status = get_available_engines()
-        self.txtLogOutput.append(self.engine_status["standard"]["detail"])
-        self.txtLogOutput.append(self.engine_status["excel"]["detail"])
-        self.txtLogOutput.append(self.engine_status["libre"]["detail"])
-        self.txtLogOutput.append(self.engine_status["jpype"]["detail"])
+    def detect_merge_engines(self, *, log_output=False, force_refresh=False):
+        self.engine_status = get_available_engines(force_refresh=force_refresh)
+        if log_output:
+            self.txtLogOutput.append(self.engine_status["standard"]["detail"])
+            self.txtLogOutput.append(self.engine_status["excel"]["detail"])
+            self.txtLogOutput.append(self.engine_status["libre"]["detail"])
+            self.txtLogOutput.append(self.engine_status["jpype"]["detail"])
 
     def _engine_runtime_available(self, engine_key):
         if engine_key == "auto":
@@ -433,8 +434,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.settings_manager.save_settings(settings)
 
     def open_options_dialog(self):
-        # Refresh detection so options reflect current runtime availability.
-        self.detect_merge_engines()
+        if not self.engine_status:
+            self.detect_merge_engines()
 
         options_for_dialog = {
             "merge_type": self.options.get("merge_type", "Sheet"),
@@ -785,7 +786,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.txtLogOutput.append("출력 파일 암호화에는 msoffcrypto-tool이 필요합니다.")
             return
 
-        self.detect_merge_engines()
+        self.detect_merge_engines(force_refresh=True)
 
         try:
             merge_type = self.options.get("merge_type", "Sheet")
