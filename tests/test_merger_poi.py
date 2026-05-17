@@ -9,6 +9,11 @@ except ImportError:  # pragma: no cover - test environment without openpyxl
     Workbook = None
     load_workbook = None
 
+try:
+    from openpyxl.drawing.image import PILImage
+except ImportError:  # pragma: no cover - test environment without Pillow/openpyxl image support
+    PILImage = False
+
 from excelmerger.engines.detector import detect_jpype
 from excelmerger.engines.poi import MergerPOI
 
@@ -141,6 +146,11 @@ class MergerPOITests(unittest.TestCase):
             merged = load_workbook(output_path, data_only=False)
             self.assertEqual(1, len(getattr(merged["image_Sheet1"], "_images", [])))
             merged.close()
+
+    test_merge_as_sheets_preserves_embedded_picture = unittest.skipUnless(
+        PILImage,
+        "Pillow/openpyxl image support unavailable",
+    )(test_merge_as_sheets_preserves_embedded_picture)
 
 
 if __name__ == "__main__":

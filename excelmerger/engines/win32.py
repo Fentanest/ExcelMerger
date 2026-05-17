@@ -132,6 +132,10 @@ class MergerWin32:
             time.sleep(0.1)
         return os.path.exists(path)
 
+    def _copy_sheet_to_merged_workbook(self, source_sheet, merged_workbook):
+        source_sheet.Copy(After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count))
+        return source_sheet.Application.ActiveSheet
+
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
         try:
@@ -156,9 +160,8 @@ class MergerWin32:
                 try:
                     source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
-                    
-                    source_sheet.Copy(Before=merged_workbook.Worksheets(1))
-                    newly_copied_sheet = excel.ActiveSheet
+
+                    newly_copied_sheet = self._copy_sheet_to_merged_workbook(source_sheet, merged_workbook)
 
                     try:
                         temp_name = f"__temp_sheet_{time.time()}"
