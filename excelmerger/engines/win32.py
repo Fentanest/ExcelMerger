@@ -181,10 +181,76 @@ class MergerWin32:
             raise RuntimeError(f"최종 저장 파일 검증에 실패했습니다: {abs_path}")
         return abs_path
 
-    def _copy_sheet_to_merged_workbook(self, source_sheet, merged_workbook):
+    def _copy_sheet_contents_fallback(self, source_sheet, merged_workbook, excel):
+        target_sheet = merged_workbook.Worksheets.Add(
+            After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+        )
+        source_range = source_sheet.UsedRange
+        target_start = target_sheet.Cells(source_range.Row, source_range.Column)
+        source_range.Copy(Destination=target_start)
+
+        for row_index in range(source_range.Row, source_range.Row + source_range.Rows.Count):
+            with suppress(Exception):
+                target_sheet.Rows(row_index).RowHeight = source_sheet.Rows(row_index).RowHeight
+            with suppress(Exception):
+                target_sheet.Rows(row_index).Hidden = source_sheet.Rows(row_index).Hidden
+
+        for column_index in range(source_range.Column, source_range.Column + source_range.Columns.Count):
+            with suppress(Exception):
+                target_sheet.Columns(column_index).ColumnWidth = source_sheet.Columns(column_index).ColumnWidth
+            with suppress(Exception):
+                target_sheet.Columns(column_index).Hidden = source_sheet.Columns(column_index).Hidden
+
+        with suppress(Exception):
+            target_sheet.Tab.Color = source_sheet.Tab.Color
+        with suppress(Exception):
+            target_sheet.Visible = source_sheet.Visible
+
+        shapes = getattr(source_sheet, "Shapes", None)
+        shape_count = getattr(shapes, "Count", 0)
+        for shape_index in range(1, shape_count + 1):
+            try:
+                shape = shapes(shape_index)
+                with suppress(Exception):
+                    source_sheet.Activate()
+                shape.Copy()
+                with suppress(Exception):
+                    target_sheet.Activate()
+                target_sheet.Paste()
+                copied_shape = target_sheet.Shapes(target_sheet.Shapes.Count)
+                with suppress(Exception):
+                    copied_shape.Left = shape.Left
+                with suppress(Exception):
+                    copied_shape.Top = shape.Top
+                with suppress(Exception):
+                    copied_shape.Width = shape.Width
+                with suppress(Exception):
+                    copied_shape.Height = shape.Height
+            except Exception as exc:
+                self._log(f"도형 복사 경고 ({source_sheet.Name}/{shape_index}): {exc}")
+            finally:
+                with suppress(Exception):
+                    excel.CutCopyMode = False
+
+        with suppress(Exception):
+            excel.CutCopyMode = False
+        return target_sheet
+
+    def _copy_sheet_to_merged_workbook(self, source_workbook, source_sheet, merged_workbook, excel, item=None):
+        with suppress(Exception):
+            excel.CutCopyMode = False
+        with suppress(Exception):
+            source_workbook.Activate()
+        with suppress(Exception):
+            source_sheet.Activate()
         previous_count = merged_workbook.Worksheets.Count
-        source_sheet.Copy(After=merged_workbook.Worksheets(previous_count))
-        return merged_workbook.Worksheets(previous_count + 1)
+        try:
+            source_sheet.Copy(After=merged_workbook.Worksheets(previous_count))
+            return merged_workbook.Worksheets(previous_count + 1)
+        except Exception as exc:
+            label = f" ({item})" if item else ""
+            self._log(f"Worksheet.Copy 직접 복사 실패{label}, 범위 복사로 재시도합니다: {exc}")
+            return self._copy_sheet_contents_fallback(source_sheet, merged_workbook, excel)
 
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
@@ -209,11 +275,18 @@ class MergerWin32:
                     self.main_window.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
                     continue
                 
+                source_workbook = None
                 try:
                     source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
 
-                    newly_copied_sheet = self._copy_sheet_to_merged_workbook(source_sheet, merged_workbook)
+                    newly_copied_sheet = self._copy_sheet_to_merged_workbook(
+                        source_workbook,
+                        source_sheet,
+                        merged_workbook,
+                        excel,
+                        item=item,
+                    )
 
                     try:
                         temp_name = f"__temp_sheet_{time.time()}"
@@ -228,13 +301,18 @@ class MergerWin32:
                         [merged_workbook.Worksheets(index).Name for index in range(1, merged_workbook.Worksheets.Count + 1)],
                     )
                     newly_copied_sheet.Name = new_sheet_name
-                    
-                    source_workbook.Close(SaveChanges=False)
-                    time.sleep(0.1)
                     merged_count += 1
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 복사 오류 (win32) {item}: {e}")
                     sheet_errors.append(item)
+                finally:
+                    if source_workbook is not None:
+                        with suppress(Exception):
+                            source_workbook.Close(SaveChanges=False)
+                    with suppress(Exception):
+                        excel.CutCopyMode = False
+
+                time.sleep(0.1)
                 
                 self._progress(int((i + 1) / total_sheets * 100))
 
@@ -309,6 +387,7 @@ class MergerWin32:
                     self.main_window.txtLogOutput.append(f"파일 정보를 찾을 수 없습니다: {file_name}")
                     continue
                 
+                source_workbook = None
                 try:
                     source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
@@ -326,13 +405,18 @@ class MergerWin32:
                             destination_range = output_sheet.Cells(last_pos + 1, 1)
                             output_sheet.Paste(Destination=destination_range)
                             last_pos += source_range.Rows.Count
-                    
-                    source_workbook.Close(SaveChanges=False)
-                    time.sleep(0.1)
                     merged_count += 1
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
                     sheet_errors.append(item)
+                finally:
+                    if source_workbook is not None:
+                        with suppress(Exception):
+                            source_workbook.Close(SaveChanges=False)
+                    with suppress(Exception):
+                        excel.CutCopyMode = False
+
+                time.sleep(0.1)
                 
                 self._progress(int((i + 1) / total_sheets * 100))
 

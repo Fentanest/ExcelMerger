@@ -89,6 +89,17 @@ class _MergedWorkbookStub:
     def __init__(self):
         self.sheets = [_MergedSheetStub(self, "Sheet1")]
         self.Worksheets = _SheetCollection(self)
+        self.Worksheets.Add = self._add_sheet
+
+    def _add_sheet(self, After=None):
+        if After is None:
+            sheet = _MergedSheetStub(self, f"Sheet{len(self.sheets) + 1}")
+            self.sheets.append(sheet)
+            return sheet
+        sheet = _MergedSheetStub(self, f"Sheet{len(self.sheets) + 1}")
+        insert_at = self.sheets.index(After) + 1
+        self.sheets.insert(insert_at, sheet)
+        return sheet
 
     def Close(self, SaveChanges=False):
         return None
@@ -103,12 +114,22 @@ class _SourceWorkbookStub:
     def Close(self, SaveChanges=False):
         return None
 
+    def Activate(self):
+        return None
+
 
 class _SourceSheetStub:
     def __init__(self, excel, name):
         self.excel = excel
         self._name = name
         self.Application = excel
+
+    @property
+    def Name(self):
+        return self._name
+
+    def Activate(self):
+        return None
 
     def Copy(self, After=None):
         copied = _MergedSheetStub(After.workbook, self._name)
@@ -117,12 +138,25 @@ class _SourceSheetStub:
         self.excel.ActiveSheet = After.workbook.sheets[0]
 
 
+class _FailingSourceSheetStub(_SourceSheetStub):
+    def Copy(self, After=None):
+        raise RuntimeError("Copy method failed")
+
+
+class _FailingSourceWorkbookStub(_SourceWorkbookStub):
+    def __init__(self, excel, name):
+        self.excel = excel
+        self.sheet = _FailingSourceSheetStub(excel, name)
+        self.Worksheets = lambda key: self.sheet if key == name else None
+
+
 class _ExcelAppStub:
     def __init__(self):
         self.Visible = False
         self.DisplayAlerts = False
         self.ActiveSheet = None
         self.Application = self
+        self.CutCopyMode = False
         self.created_workbook = None
         self.Workbooks = type("Workbooks", (), {})()
         self.Workbooks.Add = self._add
@@ -208,6 +242,39 @@ class MergerWin32Tests(unittest.TestCase):
         )
 
         self.assertEqual([["a_SheetA", "b_SheetB"]], captured_orders)
+
+    def test_merge_as_sheets_falls_back_when_direct_copy_fails(self):
+        main_window = _MainWindowStub("/tmp/source.xlsx")
+        main_window.file_info = {
+            "fileA": {"processed_path": "/tmp/a.xlsx", "original_path": "/tmp/a.xlsx"},
+        }
+
+        excel = _ExcelAppStub()
+        merger = MergerWin32(main_window, win32=_Win32DispatchStub(excel))
+        merger._open_source_workbook = lambda _excel, info, file_name: _FailingSourceWorkbookStub(
+            excel,
+            "SheetA",
+        )
+        merger.perform_sheet_trim_win32 = lambda workbook, excel_app: None
+        fallback_calls = []
+        merger._copy_sheet_contents_fallback = lambda source_sheet, merged_workbook, excel_app: (
+            fallback_calls.append(source_sheet.Name) or merged_workbook.Worksheets.Add(
+                After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+            )
+        )
+        captured_orders = []
+        merger._save_workbook = lambda workbook, save_path: captured_orders.append(
+            [sheet.Name for sheet in workbook.sheets]
+        ) or "/tmp/staged.xlsx"
+        merger._finalize_saved_workbook = lambda staged_path, save_path: save_path
+
+        merger.merge_as_sheets_win32(
+            ["fileA/SheetA"],
+            "/tmp/output.xlsx",
+        )
+
+        self.assertEqual(["SheetA"], fallback_calls)
+        self.assertEqual([["a_SheetA"]], captured_orders)
 
 
 if __name__ == "__main__":
