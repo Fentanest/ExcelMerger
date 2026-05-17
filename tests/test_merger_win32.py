@@ -72,6 +72,7 @@ class _MergedSheetStub:
     def __init__(self, workbook, name):
         self.workbook = workbook
         self._name = name
+        self.pastes = []
 
     @property
     def Name(self):
@@ -81,17 +82,37 @@ class _MergedSheetStub:
     def Name(self, value):
         self._name = value
 
+    def Cells(self, row, column):
+        return _CellDestinationStub(self, row, column)
+
+    def Paste(self, Destination=None):
+        copied_range = self.workbook.excel.clipboard_range
+        if copied_range is None:
+            raise RuntimeError("Clipboard is empty")
+        Destination.sheet.pastes.append(
+            ("paste", copied_range.label, Destination.row, Destination.column, copied_range.Rows.Count, copied_range.Columns.Count)
+        )
+
+    def Activate(self):
+        return None
+
     def Delete(self):
         self.workbook.sheets = [sheet for sheet in self.workbook.sheets if sheet is not self]
 
 
 class _MergedWorkbookStub:
-    def __init__(self):
+    def __init__(self, excel=None):
+        self.excel = excel
         self.sheets = [_MergedSheetStub(self, "Sheet1")]
         self.Worksheets = _SheetCollection(self)
         self.Worksheets.Add = self._add_sheet
 
-    def _add_sheet(self, After=None):
+    def _add_sheet(self, Before=None, After=None):
+        if Before is not None:
+            sheet = _MergedSheetStub(self, f"Sheet{len(self.sheets) + 1}")
+            insert_at = self.sheets.index(Before)
+            self.sheets.insert(insert_at, sheet)
+            return sheet
         if After is None:
             sheet = _MergedSheetStub(self, f"Sheet{len(self.sheets) + 1}")
             self.sheets.append(sheet)
@@ -131,15 +152,19 @@ class _SourceSheetStub:
     def Activate(self):
         return None
 
-    def Copy(self, After=None):
-        copied = _MergedSheetStub(After.workbook, self._name)
-        insert_at = After.workbook.sheets.index(After) + 1
-        After.workbook.sheets.insert(insert_at, copied)
-        self.excel.ActiveSheet = After.workbook.sheets[0]
+    def Copy(self, Before=None, After=None):
+        anchor = Before or After
+        copied = _MergedSheetStub(anchor.workbook, self._name)
+        if Before is not None:
+            insert_at = anchor.workbook.sheets.index(anchor)
+        else:
+            insert_at = anchor.workbook.sheets.index(anchor) + 1
+        anchor.workbook.sheets.insert(insert_at, copied)
+        self.excel.ActiveSheet = anchor.workbook.sheets[0]
 
 
 class _FailingSourceSheetStub(_SourceSheetStub):
-    def Copy(self, After=None):
+    def Copy(self, Before=None, After=None):
         raise RuntimeError("Copy method failed")
 
 
@@ -157,12 +182,13 @@ class _ExcelAppStub:
         self.ActiveSheet = None
         self.Application = self
         self.CutCopyMode = False
+        self.clipboard_range = None
         self.created_workbook = None
         self.Workbooks = type("Workbooks", (), {})()
         self.Workbooks.Add = self._add
 
     def _add(self):
-        self.created_workbook = _MergedWorkbookStub()
+        self.created_workbook = _MergedWorkbookStub(self)
         return self.created_workbook
 
     def Quit(self):
@@ -175,6 +201,63 @@ class _Win32DispatchStub:
 
     def Dispatch(self, _name):
         return self.excel
+
+
+class _CellDestinationStub:
+    def __init__(self, sheet, row, column):
+        self.sheet = sheet
+        self.row = row
+        self.column = column
+
+
+class _CountStub:
+    def __init__(self, count):
+        self.Count = count
+
+
+class _AxisRangeStub:
+    def __init__(self, excel, label, rows, columns, *, fail_direct_destination=False):
+        self.excel = excel
+        self.label = label
+        self.Rows = _CountStub(rows)
+        self.Columns = _CountStub(columns)
+        self.fail_direct_destination = fail_direct_destination
+
+    def Copy(self, Destination=None):
+        if Destination is not None:
+            if self.fail_direct_destination:
+                raise RuntimeError("Direct destination copy failed")
+            Destination.sheet.pastes.append(
+                ("direct", self.label, Destination.row, Destination.column, self.Rows.Count, self.Columns.Count)
+            )
+            return None
+        self.excel.clipboard_range = self
+        return None
+
+
+class _AxisSourceSheetStub(_SourceSheetStub):
+    def __init__(self, excel, name, rows, columns, *, fail_direct_destination=False):
+        super().__init__(excel, name)
+        self.UsedRange = _AxisRangeStub(
+            excel,
+            name,
+            rows,
+            columns,
+            fail_direct_destination=fail_direct_destination,
+        )
+
+
+class _AxisSourceWorkbookStub(_SourceWorkbookStub):
+    def __init__(self, excel, name, rows, columns, *, fail_direct_destination=False):
+        self.excel = excel
+        self.sheet = _AxisSourceSheetStub(
+            excel,
+            name,
+            rows,
+            columns,
+            fail_direct_destination=fail_direct_destination,
+        )
+        self.Worksheets = lambda key: self.sheet if key == name else None
 
 
 class MergerWin32Tests(unittest.TestCase):
@@ -259,7 +342,7 @@ class MergerWin32Tests(unittest.TestCase):
         fallback_calls = []
         merger._copy_sheet_contents_fallback = lambda source_sheet, merged_workbook, excel_app: (
             fallback_calls.append(source_sheet.Name) or merged_workbook.Worksheets.Add(
-                After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+                Before=merged_workbook.Worksheets(1)
             )
         )
         captured_orders = []
@@ -275,6 +358,118 @@ class MergerWin32Tests(unittest.TestCase):
 
         self.assertEqual(["SheetA"], fallback_calls)
         self.assertEqual([["a_SheetA"]], captured_orders)
+
+    def test_merge_by_axis_uses_single_default_sheet(self):
+        main_window = _MainWindowStub("/tmp/source.xlsx")
+        excel = _ExcelAppStub()
+        workbook = _MergedWorkbookStub()
+        workbook.sheets.extend([
+            _MergedSheetStub(workbook, "Sheet2"),
+            _MergedSheetStub(workbook, "Sheet3"),
+        ])
+        merger = MergerWin32(main_window, win32=_Win32DispatchStub(excel))
+
+        default_name = merger._ensure_single_sheet_workbook(workbook)
+
+        self.assertEqual("Sheet1", default_name)
+        self.assertEqual(["Sheet1"], [sheet.Name for sheet in workbook.sheets])
+
+    def test_copy_range_to_destination_falls_back_to_paste(self):
+        main_window = _MainWindowStub("/tmp/source.xlsx")
+        excel = _ExcelAppStub()
+        merger = MergerWin32(main_window, win32=_Win32DispatchStub(excel))
+        source_workbook = _AxisSourceWorkbookStub(
+            excel,
+            "SheetA",
+            3,
+            2,
+            fail_direct_destination=True,
+        )
+        source_sheet = source_workbook.Worksheets("SheetA")
+        output_workbook = _MergedWorkbookStub(excel)
+        output_sheet = output_workbook.Worksheets(1)
+        destination_range = output_sheet.Cells(1, 1)
+
+        merger._copy_range_to_destination(
+            excel,
+            source_workbook,
+            source_sheet,
+            source_sheet.UsedRange,
+            output_sheet,
+            destination_range,
+            item="fileA/SheetA",
+        )
+
+        self.assertEqual(
+            [("paste", "SheetA", 1, 1, 3, 2)],
+            output_sheet.pastes,
+        )
+
+    def test_merge_horizontally_preserves_requested_sheet_order(self):
+        main_window = _MainWindowStub("/tmp/source.xlsx")
+        main_window.file_info = {
+            "fileA": {"processed_path": "/tmp/a.xlsx", "original_path": "/tmp/a.xlsx"},
+            "fileB": {"processed_path": "/tmp/b.xlsx", "original_path": "/tmp/b.xlsx"},
+        }
+        excel = _ExcelAppStub()
+        merger = MergerWin32(main_window, win32=_Win32DispatchStub(excel))
+        merger._open_source_workbook = lambda _excel, info, file_name: (
+            _AxisSourceWorkbookStub(excel, "SheetA", 4, 2)
+            if file_name == "fileA"
+            else _AxisSourceWorkbookStub(excel, "SheetB", 4, 3)
+        )
+        merger.perform_sheet_trim_win32 = lambda workbook, excel_app: None
+        captured_pastes = []
+        merger._save_workbook = lambda workbook, save_path: (
+            captured_pastes.extend(workbook.Worksheets(1).pastes) or "/tmp/staged.xlsx"
+        )
+        merger._finalize_saved_workbook = lambda staged_path, save_path: save_path
+
+        merger.merge_horizontally_win32(
+            ["fileA/SheetA", "fileB/SheetB"],
+            "/tmp/output.xlsx",
+        )
+
+        self.assertEqual(
+            [
+                ("direct", "SheetA", 1, 1, 4, 2),
+                ("direct", "SheetB", 1, 3, 4, 3),
+            ],
+            captured_pastes,
+        )
+
+    def test_merge_vertically_preserves_requested_sheet_order(self):
+        main_window = _MainWindowStub("/tmp/source.xlsx")
+        main_window.file_info = {
+            "fileA": {"processed_path": "/tmp/a.xlsx", "original_path": "/tmp/a.xlsx"},
+            "fileB": {"processed_path": "/tmp/b.xlsx", "original_path": "/tmp/b.xlsx"},
+        }
+        excel = _ExcelAppStub()
+        merger = MergerWin32(main_window, win32=_Win32DispatchStub(excel))
+        merger._open_source_workbook = lambda _excel, info, file_name: (
+            _AxisSourceWorkbookStub(excel, "SheetA", 2, 5)
+            if file_name == "fileA"
+            else _AxisSourceWorkbookStub(excel, "SheetB", 3, 5)
+        )
+        merger.perform_sheet_trim_win32 = lambda workbook, excel_app: None
+        captured_pastes = []
+        merger._save_workbook = lambda workbook, save_path: (
+            captured_pastes.extend(workbook.Worksheets(1).pastes) or "/tmp/staged.xlsx"
+        )
+        merger._finalize_saved_workbook = lambda staged_path, save_path: save_path
+
+        merger.merge_vertically_win32(
+            ["fileA/SheetA", "fileB/SheetB"],
+            "/tmp/output.xlsx",
+        )
+
+        self.assertEqual(
+            [
+                ("direct", "SheetA", 1, 1, 2, 5),
+                ("direct", "SheetB", 3, 1, 3, 5),
+            ],
+            captured_pastes,
+        )
 
 
 if __name__ == "__main__":

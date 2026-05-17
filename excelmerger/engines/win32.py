@@ -181,9 +181,14 @@ class MergerWin32:
             raise RuntimeError(f"최종 저장 파일 검증에 실패했습니다: {abs_path}")
         return abs_path
 
+    def _ensure_single_sheet_workbook(self, workbook):
+        while workbook.Worksheets.Count > 1:
+            workbook.Worksheets(workbook.Worksheets.Count).Delete()
+        return workbook.Worksheets(1).Name
+
     def _copy_sheet_contents_fallback(self, source_sheet, merged_workbook, excel):
         target_sheet = merged_workbook.Worksheets.Add(
-            After=merged_workbook.Worksheets(merged_workbook.Worksheets.Count)
+            Before=merged_workbook.Worksheets(1)
         )
         source_range = source_sheet.UsedRange
         target_start = target_sheet.Cells(source_range.Row, source_range.Column)
@@ -243,14 +248,38 @@ class MergerWin32:
             source_workbook.Activate()
         with suppress(Exception):
             source_sheet.Activate()
-        previous_count = merged_workbook.Worksheets.Count
         try:
-            source_sheet.Copy(After=merged_workbook.Worksheets(previous_count))
-            return merged_workbook.Worksheets(previous_count + 1)
+            source_sheet.Copy(Before=merged_workbook.Worksheets(1))
+            return merged_workbook.Worksheets(1)
         except Exception as exc:
             label = f" ({item})" if item else ""
             self._log(f"Worksheet.Copy 직접 복사 실패{label}, 범위 복사로 재시도합니다: {exc}")
             return self._copy_sheet_contents_fallback(source_sheet, merged_workbook, excel)
+
+    def _copy_range_to_destination(self, excel, source_workbook, source_sheet, source_range, output_sheet, destination_range, item=None):
+        with suppress(Exception):
+            excel.CutCopyMode = False
+        with suppress(Exception):
+            source_workbook.Activate()
+        with suppress(Exception):
+            source_sheet.Activate()
+        try:
+            source_range.Copy(Destination=destination_range)
+            return
+        except Exception as exc:
+            label = f" ({item})" if item else ""
+            self._log(f"Range.Copy 직접 대상 복사 실패{label}, 붙여넣기로 재시도합니다: {exc}")
+
+        with suppress(Exception):
+            source_workbook.Activate()
+        with suppress(Exception):
+            source_sheet.Activate()
+        source_range.Copy()
+        with suppress(Exception):
+            output_sheet.Activate()
+        output_sheet.Paste(Destination=destination_range)
+        with suppress(Exception):
+            excel.CutCopyMode = False
 
     def merge_as_sheets_win32(self, sheets_to_merge, save_path):
         excel = None
@@ -261,12 +290,14 @@ class MergerWin32:
             excel.Visible = False
             excel.DisplayAlerts = False
             merged_workbook = excel.Workbooks.Add()
-            default_sheet_name = merged_workbook.Worksheets(1).Name
+            default_sheet_name = self._ensure_single_sheet_workbook(merged_workbook)
             sheet_errors = []
             merged_count = 0
 
             total_sheets = len(sheets_to_merge)
-            for i, item in enumerate(sheets_to_merge):
+            # Excel COM has proven more reliable when copying before the first sheet.
+            # Iterate in reverse so the final workbook still matches the user's list order.
+            for i, item in enumerate(reversed(sheets_to_merge)):
                 file_name, sheet_name = item.split('/', 1)
                 self._status(f'{item} 병합 중 (고품질 모드)...')
 
@@ -371,6 +402,7 @@ class MergerWin32:
             excel.Visible = False
             excel.DisplayAlerts = False
             output_workbook = excel.Workbooks.Add()
+            self._ensure_single_sheet_workbook(output_workbook)
             output_sheet = output_workbook.Worksheets(1)
             output_sheet.Name = "Merged_Sheet"
             sheet_errors = []
@@ -392,19 +424,35 @@ class MergerWin32:
                     source_workbook = self._open_source_workbook(excel, info, file_name)
                     source_sheet = source_workbook.Worksheets(sheet_name)
                     source_range = source_sheet.UsedRange
+                    rows_count = source_range.Rows.Count
+                    columns_count = source_range.Columns.Count
 
                     if axis == 'horizontal':
-                        if source_range.Columns.Count > 0:
-                            source_range.Copy()
+                        if columns_count > 0:
                             destination_range = output_sheet.Cells(1, last_pos + 1)
-                            output_sheet.Paste(Destination=destination_range)
-                            last_pos += source_range.Columns.Count
+                            self._copy_range_to_destination(
+                                excel,
+                                source_workbook,
+                                source_sheet,
+                                source_range,
+                                output_sheet,
+                                destination_range,
+                                item=item,
+                            )
+                            last_pos += columns_count
                     else: # vertical
-                        if source_range.Rows.Count > 0:
-                            source_range.Copy()
+                        if rows_count > 0:
                             destination_range = output_sheet.Cells(last_pos + 1, 1)
-                            output_sheet.Paste(Destination=destination_range)
-                            last_pos += source_range.Rows.Count
+                            self._copy_range_to_destination(
+                                excel,
+                                source_workbook,
+                                source_sheet,
+                                source_range,
+                                output_sheet,
+                                destination_range,
+                                item=item,
+                            )
+                            last_pos += rows_count
                     merged_count += 1
                 except Exception as e:
                     self.main_window.txtLogOutput.append(f"시트 병합 오류 (win32) {item}: {e}")
