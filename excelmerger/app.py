@@ -86,6 +86,8 @@ class MergeWorker(QThread):
                 m.status_callback = stat_cb
 
             self._execute_merge(self.engine_key, self.merge_type, self.sheets_to_merge, self.save_path)
+            if not os.path.exists(self.save_path) or os.path.getsize(self.save_path) <= 0:
+                raise RuntimeError(f"병합 결과 파일이 생성되지 않았습니다: {self.save_path}")
             
             if self.encrypt_output and self.output_encryption_password:
                 if msoffcrypto is None:

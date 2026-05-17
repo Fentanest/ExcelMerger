@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+import zipfile
 
 from excelmerger.engines.win32 import MergerWin32
 
@@ -15,14 +16,17 @@ class _WorkbookStub:
     def SaveAs(self, path, FileFormat, **kwargs):
         self.calls.append(("SaveAs", path, FileFormat, kwargs))
         if self.writes_on_saveas:
-            with open(path, "wb") as stream:
-                stream.write(b"saved")
+            self._write_workbook_file(path)
 
     def SaveCopyAs(self, path):
         self.calls.append(("SaveCopyAs", path))
         if self.writes_on_savecopy:
-            with open(path, "wb") as stream:
-                stream.write(b"copy")
+            self._write_workbook_file(path)
+
+    def _write_workbook_file(self, path):
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("[Content_Types].xml", "<Types/>")
+            archive.writestr("xl/workbook.xml", "<workbook/>")
 
 
 class _MainWindowStub:
@@ -110,7 +114,7 @@ class _SourceSheetStub:
         copied = _MergedSheetStub(After.workbook, self._name)
         insert_at = After.workbook.sheets.index(After) + 1
         After.workbook.sheets.insert(insert_at, copied)
-        self.excel.ActiveSheet = copied
+        self.excel.ActiveSheet = After.workbook.sheets[0]
 
 
 class _ExcelAppStub:
@@ -146,7 +150,9 @@ class MergerWin32Tests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "output.xlsm")
-            merger._save_workbook(workbook, output_path)
+            staged_path = merger._save_workbook(workbook, output_path)
+            self.assertTrue(os.path.exists(staged_path))
+            merger._finalize_saved_workbook(staged_path, output_path)
             self.assertTrue(os.path.exists(output_path))
 
         self.assertEqual(52, workbook.calls[0][2])
@@ -157,7 +163,9 @@ class MergerWin32Tests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "output.xlsx")
-            merger._save_workbook(workbook, output_path)
+            staged_path = merger._save_workbook(workbook, output_path)
+            self.assertTrue(os.path.exists(staged_path))
+            merger._finalize_saved_workbook(staged_path, output_path)
             self.assertTrue(os.path.exists(output_path))
 
         self.assertEqual(51, workbook.calls[0][2])
@@ -168,7 +176,8 @@ class MergerWin32Tests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, "output.xlsx")
-            merger._save_workbook(workbook, output_path)
+            staged_path = merger._save_workbook(workbook, output_path)
+            merger._finalize_saved_workbook(staged_path, output_path)
 
             self.assertTrue(any(call[0] == "SaveCopyAs" for call in workbook.calls))
             self.assertTrue(os.path.exists(output_path))
@@ -190,7 +199,8 @@ class MergerWin32Tests(unittest.TestCase):
         captured_orders = []
         merger._save_workbook = lambda workbook, save_path: captured_orders.append(
             [sheet.Name for sheet in workbook.sheets]
-        )
+        ) or "/tmp/staged.xlsx"
+        merger._finalize_saved_workbook = lambda staged_path, save_path: save_path
 
         merger.merge_as_sheets_win32(
             ["fileA/SheetA", "fileB/SheetB"],
